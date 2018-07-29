@@ -126,7 +126,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
+	  /* Esta es una prueba de commit usando eclipse */
+	  
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
