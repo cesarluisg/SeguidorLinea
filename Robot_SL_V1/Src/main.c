@@ -39,6 +39,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_hal.h"
+#include "pid.h"
+#include <stdio.h>
 
 /* USER CODE BEGIN Includes */
 
@@ -126,8 +128,17 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  /* Esta es una prueba de commit usando eclipse */
-	  
+	 
+//	/* PID example */
+//    PID pid = PID(0.1, 100, -100, 0.1, 0.01, 0.5);
+//
+//    double val = 20;
+//    for (int i = 0; i < 100; i++) {
+//        double inc = pid.calculate(0, val);
+//        printf("val:% 7.3f inc:% 7.3f\n", val, inc);
+//        val += inc;
+//    }
+
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
