@@ -39,10 +39,22 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_hal.h"
-#include "pid.h"
 #include <stdio.h>
 
+#include "pid.h"
+
 /* USER CODE BEGIN Includes */
+
+/* Sensor range defines */
+#define SENSOR_SET_POINT_VALUE	0
+#define MAX_SENSOR_VALUE		(100)
+#define MIN_SENSOR_VALUE		(-100)
+
+/* Speed range defines */
+#define RACE_SPEED_SET_VALUE	70
+#define MAX_SPEED_VALUE			100
+#define MIN_SPEED_VALUE			0
+
 
 /* USER CODE END Includes */
 
@@ -76,6 +88,8 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
                                 
                                 
 
+
+
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -83,6 +97,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN 0 */
 
+int _driverMode;
 /* USER CODE END 0 */
 
 /**
@@ -119,32 +134,128 @@ int main(void)
   MX_RTC_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
-  MX_USB_PCD_Init();
-  /* USER CODE BEGIN 2 */
+  //MX_USB_PCD_Init();
 
-  /* USER CODE END 2 */
+
+  _driverMode = RACE_MODE;
+  /* PID init */
+  pidInit();
+
+  /* Sensor PID pointer */
+  PID_s *pidSensores;
+  /* Sensor get PID */
+  if (true != pidGetPID(&pidSensores))
+  	return -1;
+  /* PID Sensor set */
+  pidSet( pidSensores, 0, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1, 0.250, 0.5, 0, 0);
+
+#if 0
+  /* Rueda Izq PID pointer */
+  PID_s *pidRuedaIzq;
+  /* Rueda get PID */
+  if (true != pidGetPID(&pidRuedaIzq))
+  	return ERROR_FAIL;
+  /* PID Sensor set */
+  pidSet( pidRuedaIzq, 0, 100, 20, 5, 5, 5, 0, 0);
+
+  /* Rueda Der PID pointer */
+  PID_s *pidRuedaDer;
+  /* Rueda get PID */
+  if (true != pidGetPID(&pidRuedaDer))
+  	return -1;
+  /* PID Sensor set */
+  pidSet( pidRuedaDer, 0, 100, 20, 5, 5, 5, 0, 0);
+#endif
+
+  double sensorValue;
+  int	motorSpeed;
+  int	readSpeed;
 
   /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
   while (1)
   {
-	 
-//	/* PID example */
-//    PID pid = PID(0.1, 100, -100, 0.1, 0.01, 0.5);
+
+//	double val = 20;
 //
-//    double val = 20;
-//    for (int i = 0; i < 100; i++) {
-//        double inc = pid.calculate(0, val);
-//        printf("val:% 7.3f inc:% 7.3f\n", val, inc);
-//        val += inc;
-//    }
+//	for (int i = 0; i < 100; i++) {
+//		double inc = pidCalculate(0, val, pidSensores);
+//		//printf("val:% 7.3f inc:% 7.3f\n", val, inc);
+//		val += inc;
+//	}
 
-  /* USER CODE END WHILE */
+	// anti windup
 
-  /* USER CODE BEGIN 3 */
+	/* Check Mode */
+	switch (_driverMode) {
+		case ERROR_MODE:
+			/* Error mode, display error */
+			//setLed();
+			_driverMode = RACE_MODE;
+			break;
+
+		case CALIBRATE_SENSOR_MODE:
+			/* Calibrate Sensor Mode */
+			//setLed();
+			break;
+
+//		case PIT_STOP_TEST_MODE:
+//			/* Pit Stop Test Mode */
+//
+//			/* Led status Pit Stop Test Mode */
+//			//setLed();
+//			break;
+//
+//		case DRIVE_TEST_MODE:
+//			/* Drive Test Mode */
+//
+//			/* Led status Drive Test Mode */
+//			//setLed();
+//			break;
+
+		case PRE_RACE_MODE:
+			/* Pre Race Mode */
+
+			/* Led status Race Mode */
+			//setLed();
+
+			/* Wait for Button ON to RUN */
+			if(true)
+			{
+				/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
+				pidSet( pidSensores, 0, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1, 0.250, 0.5, 0, 0);
+				/* Go to Race */
+				_driverMode = RACE_MODE;
+			}
+			break;
+
+		case RACE_MODE:
+			/* Race Mode */
+
+			/* Get sensor error */
+			// sensorValue = GetSensorValue();
+
+			/* Calculate error PID */
+			pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, sensorValue);
+
+			/* Set motor speed */
+			// setMotorSpeed(motorSpeed);
+			break;
+
+		default:
+			/* Unknown mode */
+			_driverMode = ERROR_MODE;
+			break;
+	};
+
+	/* Change Mode Button */
+	if(true)
+	{
+		_driverMode++;
+		if (LAST_MODE <= _driverMode)
+			_driverMode = CALIBRATE_SENSOR_MODE;
+	}
 
   }
-  /* USER CODE END 3 */
 
 }
 

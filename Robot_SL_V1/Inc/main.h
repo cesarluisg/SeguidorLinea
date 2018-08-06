@@ -41,9 +41,32 @@
 #ifndef __MAIN_H__
 #define __MAIN_H__
 
+#include <stdbool.h>
+
 /* Includes ------------------------------------------------------------------*/
 
 /* USER CODE BEGIN Includes */
+
+enum RaceMode
+{
+	ERROR_MODE = 0,
+	CALIBRATE_SENSOR_MODE,
+//	PIT_STOP_TEST_MODE,
+//	DRIVE_TEST_MODE,
+	PRE_RACE_MODE,
+	RACE_MODE,
+	LAST_MODE
+};
+
+enum genError
+{
+	ERROR_SUCCESS = 0,
+	ERROR_FAIL,
+	ERROR_FATAL,
+	ERROR_HARD,
+	ERROR_PID
+};
+
 
 /* USER CODE END Includes */
 
