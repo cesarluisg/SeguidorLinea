@@ -9,6 +9,7 @@
 //using namespace std;
 
 #define PID_MAX 3
+#define WINDUP_FILTER
 
 PID_s _pid[PID_MAX];
 int _pidCount;
@@ -58,15 +59,33 @@ extern double pidCalculate( PID_s *pid, double setpoint, double pv )
     // Proportional term
     double Pout = pid->Kp * error;
 
-    // Integral term
-    pid->integral += error * pid->dt;
-    double Iout = pid->Ki * pid->integral;
-
     // Derivative term
     if (0.0 == pid->dt) {
     	/* Y aca que hacemos? */
     	return 0;
     }
+
+    // Integral term
+    pid->integral += error * pid->dt;
+    double Iout = pid->Ki * pid->integral;
+
+#ifdef WINDUP_FILTER
+	if(setpoint > pv)
+	{
+		if(setpoint < (pv + Iout + Pout))
+		{
+			pid->integral = 0;
+		}
+	}
+	else if(setpoint < pv)
+	{
+		if(setpoint > (pv + Iout + Pout))
+		{
+			pid->integral = 0;
+		}
+	}
+#endif
+
 	double derivative = (error - pid->pre_error) / pid->dt;
 	double Dout = pid->Kd * derivative;
 

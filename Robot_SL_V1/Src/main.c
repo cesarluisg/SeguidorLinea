@@ -87,7 +87,7 @@ static void MX_USB_PCD_Init(void);
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
                                 
                                 
-
+void calcVel(int velMax, int velMin, double newCorrection);
 
 
 /* USER CODE BEGIN PFP */
@@ -107,25 +107,12 @@ int _driverMode;
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration----------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
   /* Configure the system clock */
   SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
@@ -167,23 +154,17 @@ int main(void)
   pidSet( pidRuedaDer, 0, 100, 20, 5, 5, 5, 0, 0);
 #endif
 
-  double sensorValue;
-  int	motorSpeed;
-  int	readSpeed;
+  double sensorValue = 0;
+  double correction = 0;
+
+  int velMax = RACE_SPEED_SET_VALUE;
+  int velMin = MIN_SPEED_VALUE;
+
+  int readSpeed = 0;
 
   /* Infinite loop */
   while (1)
   {
-
-//	double val = 20;
-//
-//	for (int i = 0; i < 100; i++) {
-//		double inc = pidCalculate(0, val, pidSensores);
-//		//printf("val:% 7.3f inc:% 7.3f\n", val, inc);
-//		val += inc;
-//	}
-
-	// anti windup
 
 	/* Check Mode */
 	switch (_driverMode) {
@@ -198,20 +179,6 @@ int main(void)
 			//setLed();
 			break;
 
-//		case PIT_STOP_TEST_MODE:
-//			/* Pit Stop Test Mode */
-//
-//			/* Led status Pit Stop Test Mode */
-//			//setLed();
-//			break;
-//
-//		case DRIVE_TEST_MODE:
-//			/* Drive Test Mode */
-//
-//			/* Led status Drive Test Mode */
-//			//setLed();
-//			break;
-
 		case PRE_RACE_MODE:
 			/* Pre Race Mode */
 
@@ -221,8 +188,9 @@ int main(void)
 			/* Wait for Button ON to RUN */
 			if(true)
 			{
+				//Example pidSet (pidSensores, 0.1, 100, -100, 0.6, 0.02, 0.1, 0, 0);
 				/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
-				pidSet( pidSensores, 0, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1, 0.250, 0.5, 0, 0);
+				pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.6, 0.02, 0.01, 0, 0);
 				/* Go to Race */
 				_driverMode = RACE_MODE;
 			}
@@ -235,10 +203,11 @@ int main(void)
 			// sensorValue = GetSensorValue();
 
 			/* Calculate error PID */
-			pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, sensorValue);
+			correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, sensorValue);
 
-			/* Set motor speed */
-			// setMotorSpeed(motorSpeed);
+			/* Calculate velocity of a motors and set value */
+			calcVel(velMax, velMin, correction);
+
 			break;
 
 		default:
@@ -258,6 +227,38 @@ int main(void)
   }
 
 }
+
+
+void calcVel(int velMax, int velMin, double newCorrection)
+{
+    int velMotorIzq = velMax;
+    int velMotorDer = velMax;
+
+    /* newCorrection es bueno que sea un double asi se puede multiplicar por un fraccional */
+    newCorrection = newCorrection * 1.5;
+
+    if(newCorrection > 0)
+    {
+        velMotorIzq = velMotorIzq - (int) newCorrection;
+        if (velMotorIzq < velMin)
+        {
+            velMotorIzq = velMin;
+        }
+    }
+    else if (newCorrection < 0)
+    {
+        velMotorDer = velMotorDer + (int) newCorrection;
+        if (velMotorDer < velMin)
+        {
+            velMotorDer = velMin;
+        }
+    }
+
+    //MotorSetVelIzq(velMotorIzq);
+    //MotorSetVelDer(velMotorDer);
+}
+
+
 
 /**
   * @brief System Clock Configuration
