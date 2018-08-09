@@ -51,9 +51,9 @@
 #define MIN_SENSOR_VALUE		(-100)
 
 /* Speed range defines */
-#define RACE_SPEED_SET_VALUE	70
-#define MAX_SPEED_VALUE			100
-#define MIN_SPEED_VALUE			0
+#define RACE_POWER_SET_VALUE	70
+#define MAX_POWER_VALUE			100
+#define MIN_POWER_VALUE			0
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
@@ -97,6 +97,7 @@ static void MX_TIM3_Init(void);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void calcVel(int velMax, int velMin, double newCorrection);
+int increasePower(int currPowMax);
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -129,8 +130,8 @@ int main(void)
   double sensorValue = 0;
   double correction = 0;
 
-  int velMax = RACE_SPEED_SET_VALUE;
-  int velMin = MIN_SPEED_VALUE;
+  int powMax = RACE_POWER_SET_VALUE;
+  int powMin = MIN_POWER_VALUE;
 
   //int readSpeed = 0;
 
@@ -190,10 +191,20 @@ int main(void)
 			break;
 
 		case PRE_RACE_MODE:
-			/* Pre Race Mode */
+			/* PreRace Mode */
 
 			/* Led status Race Mode */
 			//setLed();
+
+			/* Wait for Button To change Max Power to Motor */
+			if(false) /*  */
+			{
+				/* take new power value */
+				powMax = increasePower(powMax);
+
+				/* Led Power Value */
+				//setLedBLink(powMax/ledFrequency);
+			}
 
 			/* Wait for Button ON to RUN */
 			if(false) /* Is button change mode on? */
@@ -217,7 +228,7 @@ int main(void)
 			correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, sensorValue);
 
 			/* Calculate velocity of a motors and set values */
-			calcVel(velMax, velMin, correction);
+			calcVel(powMax, powMin, correction);
 
 			break;
 
@@ -242,10 +253,10 @@ int main(void)
 }
 
 
-void calcVel(int velMax, int velMin, double newCorrection)
+void calcVel(int powMax, int powMin, double newCorrection)
 {
-    int velMotorIzq = velMax;
-    int velMotorDer = velMax;
+    int velMotorIzq = powMax;
+    int velMotorDer = powMax;
 
     /* newCorrection es bueno que sea un double asi se puede multiplicar por un fraccional */
     newCorrection = newCorrection * 1.5;
@@ -253,17 +264,17 @@ void calcVel(int velMax, int velMin, double newCorrection)
     if(newCorrection > 0)
     {
         velMotorIzq = velMotorIzq - (int) newCorrection;
-        if (velMotorIzq < velMin)
+        if (velMotorIzq < powMin)
         {
-            velMotorIzq = velMin;
+            velMotorIzq = powMin;
         }
     }
     else if (newCorrection < 0)
     {
         velMotorDer = velMotorDer + (int) newCorrection;
-        if (velMotorDer < velMin)
+        if (velMotorDer < powMin)
         {
-            velMotorDer = velMin;
+            velMotorDer = powMin;
         }
     }
 
@@ -272,6 +283,19 @@ void calcVel(int velMax, int velMin, double newCorrection)
     //MotorIzq.setPotencia((unsigned short int) velMotorIzq);
 }
 
+int increasePower(int currPowMax)
+{
+    int newPower = currPowMax;
+    /* increase power on 10% */
+    newPower += 10;
+    /* Check overflow */
+    if(newPower > MAX_POWER_VALUE)
+    {
+    	/* Set half of power 50% */
+    	newPower = MAX_POWER_VALUE/2;
+    }
+    return newPower;
+}
 
 
 /**
