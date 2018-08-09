@@ -8,8 +8,11 @@
 #ifndef MOTOR_H_
 #define MOTOR_H_
 
+#define MOTOR_IZQUIERDO	1
+#define MOTOR_DERECHO	2
+
 enum enum_motor_freno {MOTOR_FRENO_FRENAR, MOTOR_FRENO_LIBERAR};
-enum enum_motor_error {MOTOR_SUCCESS}
+enum enum_motor_error {MOTOR_SUCCESS};
 
 class Motor {
 private:
@@ -18,6 +21,7 @@ private:
 public:
 	Motor();
 	virtual ~Motor();
+	enum_motor_error setMotorNumber(int motorId);
 	enum_motor_error setPotencia(unsigned short int potencia);
 	enum_motor_error setFreno(enum_motor_freno freno); // MOTOR_FRENO_FRENAR deshabilita salida de potencia
 };

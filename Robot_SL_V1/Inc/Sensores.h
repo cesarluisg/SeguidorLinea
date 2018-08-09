@@ -14,6 +14,8 @@ private:
 public:
 	Sensores();
 	virtual ~Sensores();
+
+	int getValue(void);
 };
 
 #endif /* SENSORES_H_ */

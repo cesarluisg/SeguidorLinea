@@ -39,14 +39,11 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_hal.h"
-<<<<<<< HEAD
-=======
 #include <stdio.h>
->>>>>>> branch 'master' of https://github.com/cesarluisg/SeguidorLinea.git
 
 #include "pid.h"
-
-/* USER CODE BEGIN Includes */
+#include "Sensores.h"
+#include "Motor.h"
 
 /* Sensor range defines */
 #define SENSOR_SET_POINT_VALUE	0
@@ -57,9 +54,6 @@
 #define RACE_SPEED_SET_VALUE	70
 #define MAX_SPEED_VALUE			100
 #define MIN_SPEED_VALUE			0
-
-
-/* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
@@ -74,10 +68,20 @@ TIM_HandleTypeDef htim4;
 
 PCD_HandleTypeDef hpcd_USB_FS;
 
-/* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
-/* USER CODE END PV */
+/* Driver Mode */
+int _driverMode;
+
+/* TODO Cesar */
+/* Motores objects */
+//Motor MotorIzq;
+//Motor MotorDer;
+
+/* TODO Cesar */
+/* Sensores objects */
+//Sensores mySensores;
+
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
@@ -86,31 +90,20 @@ static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_RTC_Init(void);
 static void MX_ADC1_Init(void);
-static void MX_USB_PCD_Init(void);
+//static void MX_USB_PCD_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM3_Init(void);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
-                                
-                                
 void calcVel(int velMax, int velMin, double newCorrection);
 
-
-/* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
-/* USER CODE END PFP */
-
-/* USER CODE BEGIN 0 */
-
-int _driverMode;
-/* USER CODE END 0 */
-
 /**
-  * @brief  The application entry point.
+  * @brief  main.
   *
-  * @retval None
+  * @retval error
   */
 int main(void)
 {
@@ -127,17 +120,26 @@ int main(void)
   MX_TIM2_Init();
   MX_RTC_Init();
   MX_ADC1_Init();
-<<<<<<< HEAD
-  MX_USB_PCD_Init();
+  //MX_USB_PCD_Init();
   MX_ADC2_Init();
   MX_TIM4_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-=======
-  MX_ADC2_Init();
-  //MX_USB_PCD_Init();
->>>>>>> branch 'master' of https://github.com/cesarluisg/SeguidorLinea.git
 
+  double sensorValue = 0;
+  double correction = 0;
+
+  int velMax = RACE_SPEED_SET_VALUE;
+  int velMin = MIN_SPEED_VALUE;
+
+  //int readSpeed = 0;
+
+  /* TODO Cesar */
+  //MotorIzq.setMotorNumber(MOTOR_IZQUIERDO);
+  //MotorDer.setMotorNumber(MOTOR_DERECHO);
+
+  /* TODO Cesar */
+  //mySensores.init();
 
   _driverMode = RACE_MODE;
   /* PID init */
@@ -150,6 +152,7 @@ int main(void)
   	return -1;
   /* PID Sensor set */
   pidSet( pidSensores, 0, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1, 0.250, 0.5, 0, 0);
+
 
 #if 0
   /* Rueda Izq PID pointer */
@@ -169,18 +172,10 @@ int main(void)
   pidSet( pidRuedaDer, 0, 100, 20, 5, 5, 5, 0, 0);
 #endif
 
-  double sensorValue = 0;
-  double correction = 0;
-
-  int velMax = RACE_SPEED_SET_VALUE;
-  int velMin = MIN_SPEED_VALUE;
-
-  int readSpeed = 0;
 
   /* Infinite loop */
-  while (1)
+  while (true)
   {
-
 	/* Check Mode */
 	switch (_driverMode) {
 		case ERROR_MODE:
@@ -201,7 +196,7 @@ int main(void)
 			//setLed();
 
 			/* Wait for Button ON to RUN */
-			if(true)
+			if(false) /* Is button change mode on? */
 			{
 				//Example pidSet (pidSensores, 0.1, 100, -100, 0.6, 0.02, 0.1, 0, 0);
 				/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
@@ -214,13 +209,14 @@ int main(void)
 		case RACE_MODE:
 			/* Race Mode */
 
+		    /* TODO Cesar */
 			/* Get sensor error */
-			// sensorValue = GetSensorValue();
+			// sensorValue = mySensores.getValue();
 
 			/* Calculate error PID */
 			correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, sensorValue);
 
-			/* Calculate velocity of a motors and set value */
+			/* Calculate velocity of a motors and set values */
 			calcVel(velMax, velMin, correction);
 
 			break;
@@ -232,11 +228,13 @@ int main(void)
 	};
 
 	/* Change Mode Button */
-	if(true)
+	if(false) /* Is button change mode on? */
 	{
 		_driverMode++;
 		if (LAST_MODE <= _driverMode)
+		{
 			_driverMode = CALIBRATE_SENSOR_MODE;
+		}
 	}
 
   }
@@ -269,8 +267,9 @@ void calcVel(int velMax, int velMin, double newCorrection)
         }
     }
 
-    //MotorSetVelIzq(velMotorIzq);
-    //MotorSetVelDer(velMotorDer);
+    /* TODO Cesar */
+    //MotorDer.setPotencia((unsigned short int) velMotorDer);
+    //MotorIzq.setPotencia((unsigned short int) velMotorIzq);
 }
 
 
@@ -593,6 +592,7 @@ static void MX_TIM4_Init(void)
 
 }
 
+#if 0
 /* USB init function */
 static void MX_USB_PCD_Init(void)
 {
@@ -610,6 +610,7 @@ static void MX_USB_PCD_Init(void)
   }
 
 }
+#endif
 
 /** Configure pins as 
         * Analog 
