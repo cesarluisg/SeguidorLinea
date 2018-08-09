@@ -41,19 +41,14 @@
 #include "stm32f1xx_hal.h"
 #include <stdio.h>
 
+/* USER CODE BEGIN Includes */
+/* Includes ------------------------------------------------------------------*/
+
 #include "pid.h"
 #include "Sensores.h"
 #include "Motor.h"
+/* USER CODE END Includes */
 
-/* Sensor range defines */
-#define SENSOR_SET_POINT_VALUE	0
-#define MAX_SENSOR_VALUE		(100)
-#define MIN_SENSOR_VALUE		(-100)
-
-/* Speed range defines */
-#define RACE_POWER_SET_VALUE	70
-#define MAX_POWER_VALUE			100
-#define MIN_POWER_VALUE			0
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
@@ -68,6 +63,8 @@ TIM_HandleTypeDef htim4;
 
 PCD_HandleTypeDef hpcd_USB_FS;
 
+
+/* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
 /* Driver Mode */
@@ -82,8 +79,21 @@ int _driverMode;
 /* Sensores objects */
 //Sensores mySensores;
 
+/* Sensor range defines */
+#define SENSOR_SET_POINT_VALUE	0
+#define MAX_SENSOR_VALUE		(100)
+#define MIN_SENSOR_VALUE		(-100)
+
+/* Speed range defines */
+#define RACE_POWER_SET_VALUE	70
+#define MAX_POWER_VALUE			100
+#define MIN_POWER_VALUE			0
+
+/* USER CODE END PV */
+
 
 /* Private function prototypes -----------------------------------------------*/
+
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
@@ -95,11 +105,21 @@ static void MX_ADC2_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM3_Init(void);
 
+
+/* USER CODE BEGIN PFP */
+
+/* Private function prototypes -----------------------------------------------*/
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void calcVel(int velMax, int velMin, double newCorrection);
 int increasePower(int currPowMax);
 
-/* Private function prototypes -----------------------------------------------*/
+/* USER CODE END PFP */
+
+
+/* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+
 
 /**
   * @brief  main.
@@ -108,6 +128,10 @@ int increasePower(int currPowMax);
   */
 int main(void)
 {
+
+  /* USER CODE BEGIN 1 */
+
+
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
@@ -250,6 +274,7 @@ int main(void)
 
   }
 
+  /* USER CODE END 1 */
 }
 
 
