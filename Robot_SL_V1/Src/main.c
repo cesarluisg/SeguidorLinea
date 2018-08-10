@@ -4,51 +4,56 @@
   * @file           : main.c
   * @brief          : Main program body
   ******************************************************************************
-  ** This notice applies to any and all portions of this file
+  * This notice applies to any and all portions of this file
   * that are not between comment pairs USER CODE BEGIN and
   * USER CODE END. Other portions of this file, whether 
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * Copyright (c) 2018 STMicroelectronics International N.V. 
+  * All rights reserved.
   *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
+  * Redistribution and use in source and binary forms, with or without 
+  * modification, are permitted, provided that the following conditions are met:
   *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * 1. Redistribution of source code must retain the above copyright notice, 
+  *    this list of conditions and the following disclaimer.
+  * 2. Redistributions in binary form must reproduce the above copyright notice,
+  *    this list of conditions and the following disclaimer in the documentation
+  *    and/or other materials provided with the distribution.
+  * 3. Neither the name of STMicroelectronics nor the names of other 
+  *    contributors to this software may be used to endorse or promote products 
+  *    derived from this software without specific written permission.
+  * 4. This software, including modifications and/or derivative works of this 
+  *    software, must execute solely and exclusively on microcontroller or
+  *    microprocessor devices manufactured by or for STMicroelectronics.
+  * 5. Redistribution and use of this software other than as permitted under 
+  *    this license is void and will automatically terminate your rights under 
+  *    this license. 
+  *
+  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
+  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
+  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
+  * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
+  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
+  * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+  * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
+  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   *
   ******************************************************************************
   */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_hal.h"
-#include <stdio.h>
+#include "usb_device.h"
 
 /* USER CODE BEGIN Includes */
-/* Includes ------------------------------------------------------------------*/
-
-#include "pid.h"
-#include "Sensores.h"
-#include "Motor.h"
+#include "PID.h"
 /* USER CODE END Includes */
-
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
@@ -61,23 +66,35 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
-PCD_HandleTypeDef hpcd_USB_FS;
-
+UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-/* Private variables ---------------------------------------------------------*/
+/* USER CODE END PV */
 
-/* Driver Mode */
-int _driverMode;
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_ADC2_Init(void);
+static void MX_TIM4_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_RTC_Init(void);
 
-/* TODO Cesar */
-/* Motores objects */
-//Motor MotorIzq;
-//Motor MotorDer;
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+                                
+                                
 
-/* TODO Cesar */
-/* Sensores objects */
-//Sensores mySensores;
+/* USER CODE BEGIN PFP */
+
+void calcVel(int velMax, int velMin, double newCorrection);
+int increasePower(int currPowMax);
+
+/* USER CODE END PFP */
+
+/* USER CODE BEGIN 0 */
 
 /* Sensor range defines */
 #define SENSOR_SET_POINT_VALUE	0
@@ -89,73 +106,55 @@ int _driverMode;
 #define MAX_POWER_VALUE			100
 #define MIN_POWER_VALUE			0
 
-/* USER CODE END PV */
-
-
-/* Private function prototypes -----------------------------------------------*/
-
-void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_TIM1_Init(void);
-static void MX_TIM2_Init(void);
-static void MX_RTC_Init(void);
-static void MX_ADC1_Init(void);
-//static void MX_USB_PCD_Init(void);
-static void MX_ADC2_Init(void);
-static void MX_TIM4_Init(void);
-static void MX_TIM3_Init(void);
-
-
-/* USER CODE BEGIN PFP */
-
-/* Private function prototypes -----------------------------------------------*/
-void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
-void calcVel(int velMax, int velMin, double newCorrection);
-int increasePower(int currPowMax);
-
-/* USER CODE END PFP */
-
-
-/* USER CODE BEGIN 0 */
+/* Driver Mode */
+int _driverMode;
 
 /* USER CODE END 0 */
 
-
 /**
-  * @brief  main.
+  * @brief  The application entry point.
   *
-  * @retval error
+  * @retval None
   */
 int main(void)
 {
-
   /* USER CODE BEGIN 1 */
 
+	double sensorValue = 0;
+	double correction = 0;
 
+	int powMax = RACE_POWER_SET_VALUE;
+	int powMin = MIN_POWER_VALUE;
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration----------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
+  /* USER CODE BEGIN Init */
+  /* USER CODE END Init */
+
   /* Configure the system clock */
   SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+  /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
-  MX_RTC_Init();
   MX_ADC1_Init();
-  //MX_USB_PCD_Init();
   MX_ADC2_Init();
   MX_TIM4_Init();
   MX_TIM3_Init();
+  MX_USB_DEVICE_Init();
+  MX_USART1_UART_Init();
+  MX_RTC_Init();
+
   /* USER CODE BEGIN 2 */
-
-  double sensorValue = 0;
-  double correction = 0;
-
-  int powMax = RACE_POWER_SET_VALUE;
-  int powMin = MIN_POWER_VALUE;
 
   //int readSpeed = 0;
 
@@ -178,7 +177,6 @@ int main(void)
   /* PID Sensor set */
   pidSet( pidSensores, 0, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1, 0.250, 0.5, 0, 0);
 
-
 #if 0
   /* Rueda Izq PID pointer */
   PID_s *pidRuedaIzq;
@@ -197,131 +195,90 @@ int main(void)
   pidSet( pidRuedaDer, 0, 100, 20, 5, 5, 5, 0, 0);
 #endif
 
+  /* USER CODE END 2 */
 
   /* Infinite loop */
   while (true)
   {
-	/* Check Mode */
-	switch (_driverMode) {
-		case ERROR_MODE:
-			/* Error mode, display error */
-			//setLed();
-			_driverMode = RACE_MODE;
-			break;
-
-		case CALIBRATE_SENSOR_MODE:
-			/* Calibrate Sensor Mode */
-			//setLed();
-			break;
-
-		case PRE_RACE_MODE:
-			/* PreRace Mode */
-
-			/* Led status Race Mode */
-			//setLed();
-
-			/* Wait for Button To change Max Power to Motor */
-			if(false) /*  */
-			{
-				/* take new power value */
-				powMax = increasePower(powMax);
-
-				/* Led Power Value */
-				//setLedBLink(powMax/ledFrequency);
-			}
-
-			/* Wait for Button ON to RUN */
-			if(false) /* Is button change mode on? */
-			{
-				//Example pidSet (pidSensores, 0.1, 100, -100, 0.6, 0.02, 0.1, 0, 0);
-				/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
-				pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.6, 0.02, 0.01, 0, 0);
-				/* Go to Race */
+  /* USER CODE BEGIN WHILE */
+		/* Check Mode */
+		switch (_driverMode) {
+			case ERROR_MODE:
+				/* Error mode, display error */
+				//setLed();
 				_driverMode = RACE_MODE;
-			}
-			break;
+				break;
 
-		case RACE_MODE:
-			/* Race Mode */
+			case CALIBRATE_SENSOR_MODE:
+				/* Calibrate Sensor Mode */
+				//setLed();
+				break;
 
-		    /* TODO Cesar */
-			/* Get sensor error */
-			// sensorValue = mySensores.getValue();
+			case PRE_RACE_MODE:
+				/* PreRace Mode */
 
-			/* Calculate error PID */
-			correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, sensorValue);
+				/* Led status Race Mode */
+				//setLed();
 
-			/* Calculate velocity of a motors and set values */
-			calcVel(powMax, powMin, correction);
+				/* Wait for Button To change Max Power to Motor */
+				if(false) /*  */
+				{
+					/* take new power value */
+					powMax = increasePower(powMax);
 
-			break;
+					/* Led Power Value */
+					//setLedBLink(powMax/ledFrequency);
+				}
 
-		default:
-			/* Unknown mode */
-			_driverMode = ERROR_MODE;
-			break;
-	};
+				/* Wait for Button ON to RUN */
+				if(false) /* Is button change mode on? */
+				{
+					//Example pidSet (pidSensores, 0.1, 100, -100, 0.6, 0.02, 0.1, 0, 0);
+					/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
+					pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.6, 0.02, 0.01, 0, 0);
+					/* Go to Race */
+					_driverMode = RACE_MODE;
+				}
+				break;
 
-	/* Change Mode Button */
-	if(false) /* Is button change mode on? */
-	{
-		_driverMode++;
-		if (LAST_MODE <= _driverMode)
+			case RACE_MODE:
+				/* Race Mode */
+
+			    /* TODO Cesar */
+				/* Get sensor error */
+				// sensorValue = mySensores.getValue();
+
+				/* Calculate error PID */
+				correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, sensorValue);
+
+				/* Calculate velocity of a motors and set values */
+				calcVel(powMax, powMin, correction);
+
+				break;
+
+			default:
+				/* Unknown mode */
+				_driverMode = ERROR_MODE;
+				break;
+		};
+
+		/* Change Mode Button */
+		if(false) /* Is button change mode on? */
 		{
-			_driverMode = CALIBRATE_SENSOR_MODE;
+			_driverMode++;
+			if (LAST_MODE <= _driverMode)
+			{
+				_driverMode = CALIBRATE_SENSOR_MODE;
+			}
 		}
-	}
+
+  /* USER CODE END WHILE */
+
+  /* USER CODE BEGIN 3 */
+  /* USER CODE END 3 */
 
   }
-
-  /* USER CODE END 1 */
 }
-
-
-void calcVel(int powMax, int powMin, double newCorrection)
-{
-    int velMotorIzq = powMax;
-    int velMotorDer = powMax;
-
-    /* newCorrection es bueno que sea un double asi se puede multiplicar por un fraccional */
-    newCorrection = newCorrection * 1.5;
-
-    if(newCorrection > 0)
-    {
-        velMotorIzq = velMotorIzq - (int) newCorrection;
-        if (velMotorIzq < powMin)
-        {
-            velMotorIzq = powMin;
-        }
-    }
-    else if (newCorrection < 0)
-    {
-        velMotorDer = velMotorDer + (int) newCorrection;
-        if (velMotorDer < powMin)
-        {
-            velMotorDer = powMin;
-        }
-    }
-
-    /* TODO Cesar */
-    //MotorDer.setPotencia((unsigned short int) velMotorDer);
-    //MotorIzq.setPotencia((unsigned short int) velMotorIzq);
-}
-
-int increasePower(int currPowMax)
-{
-    int newPower = currPowMax;
-    /* increase power on 10% */
-    newPower += 10;
-    /* Check overflow */
-    if(newPower > MAX_POWER_VALUE)
-    {
-    	/* Set half of power 50% */
-    	newPower = MAX_POWER_VALUE/2;
-    }
-    return newPower;
-}
-
 
 /**
   * @brief System Clock Configuration
@@ -394,12 +351,12 @@ static void MX_ADC1_Init(void)
     /**Common config 
     */
   hadc1.Instance = ADC1;
-  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.NbrOfConversion = 3;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -407,9 +364,27 @@ static void MX_ADC1_Init(void)
 
     /**Configure Regular Channel 
     */
-  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Configure Regular Channel 
+    */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Configure Regular Channel 
+    */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -426,12 +401,12 @@ static void MX_ADC2_Init(void)
     /**Common config 
     */
   hadc2.Instance = ADC2;
-  hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc2.Init.ContinuousConvMode = DISABLE;
+  hadc2.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc2.Init.ContinuousConvMode = ENABLE;
   hadc2.Init.DiscontinuousConvMode = DISABLE;
   hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.NbrOfConversion = 3;
   if (HAL_ADC_Init(&hadc2) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -439,9 +414,27 @@ static void MX_ADC2_Init(void)
 
     /**Configure Regular Channel 
     */
-  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Configure Regular Channel 
+    */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Configure Regular Channel 
+    */
+  sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
   if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -454,11 +447,9 @@ static void MX_RTC_Init(void)
 {
 
   /* USER CODE BEGIN RTC_Init 0 */
-
   /* USER CODE END RTC_Init 0 */
 
   /* USER CODE BEGIN RTC_Init 1 */
-
   /* USER CODE END RTC_Init 1 */
 
     /**Initialize RTC Only 
@@ -471,7 +462,6 @@ static void MX_RTC_Init(void)
     _Error_Handler(__FILE__, __LINE__);
   }
   /* USER CODE BEGIN RTC_Init 2 */
-
   /* USER CODE END RTC_Init 2 */
 
 }
@@ -573,6 +563,7 @@ static void MX_TIM2_Init(void)
 static void MX_TIM3_Init(void)
 {
 
+  TIM_ClockConfigTypeDef sClockSourceConfig;
   TIM_MasterConfigTypeDef sMasterConfig;
   TIM_IC_InitTypeDef sConfigIC;
 
@@ -582,6 +573,17 @@ static void MX_TIM3_Init(void)
   htim3.Init.Period = 0;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
   if (HAL_TIM_IC_Init(&htim3) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -609,6 +611,7 @@ static void MX_TIM3_Init(void)
 static void MX_TIM4_Init(void)
 {
 
+  TIM_ClockConfigTypeDef sClockSourceConfig;
   TIM_MasterConfigTypeDef sMasterConfig;
   TIM_IC_InitTypeDef sConfigIC;
 
@@ -618,6 +621,17 @@ static void MX_TIM4_Init(void)
   htim4.Init.Period = 0;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
   if (HAL_TIM_IC_Init(&htim4) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -641,25 +655,24 @@ static void MX_TIM4_Init(void)
 
 }
 
-#if 0
-/* USB init function */
-static void MX_USB_PCD_Init(void)
+/* USART1 init function */
+static void MX_USART1_UART_Init(void)
 {
 
-  hpcd_USB_FS.Instance = USB;
-  hpcd_USB_FS.Init.dev_endpoints = 8;
-  hpcd_USB_FS.Init.speed = PCD_SPEED_FULL;
-  hpcd_USB_FS.Init.ep0_mps = DEP0CTL_MPS_8;
-  hpcd_USB_FS.Init.low_power_enable = DISABLE;
-  hpcd_USB_FS.Init.lpm_enable = DISABLE;
-  hpcd_USB_FS.Init.battery_charging_enable = DISABLE;
-  if (HAL_PCD_Init(&hpcd_USB_FS) != HAL_OK)
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
 
 }
-#endif
 
 /** Configure pins as 
         * Analog 
@@ -711,6 +724,49 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void calcVel(int powMax, int powMin, double newCorrection)
+{
+    int velMotorIzq = powMax;
+    int velMotorDer = powMax;
+
+    /* newCorrection es bueno que sea un double asi se puede multiplicar por un fraccional */
+    newCorrection = newCorrection * 1.5;
+
+    if(newCorrection > 0)
+    {
+        velMotorIzq = velMotorIzq - (int) newCorrection;
+        if (velMotorIzq < powMin)
+        {
+            velMotorIzq = powMin;
+        }
+    }
+    else if (newCorrection < 0)
+    {
+        velMotorDer = velMotorDer + (int) newCorrection;
+        if (velMotorDer < powMin)
+        {
+            velMotorDer = powMin;
+        }
+    }
+
+    /* TODO Cesar */
+    //MotorDer.setPotencia((unsigned short int) velMotorDer);
+    //MotorIzq.setPotencia((unsigned short int) velMotorIzq);
+}
+
+int increasePower(int currPowMax)
+{
+	 int newPower = currPowMax;
+	    /* increase power on 10% */
+	    newPower += 10;
+	    /* Check overflow */
+	    if(newPower > MAX_POWER_VALUE)
+	    {
+	    	/* Set half of power 50% */
+	    	newPower = MAX_POWER_VALUE/2;
+	    }
+	    return newPower;
+}
 
 /* USER CODE END 4 */
 
@@ -723,10 +779,6 @@ static void MX_GPIO_Init(void)
 void _Error_Handler(char *file, int line)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  while(1)
-  {
-  }
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -741,8 +793,6 @@ void _Error_Handler(char *file, int line)
 void assert_failed(uint8_t* file, uint32_t line)
 { 
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

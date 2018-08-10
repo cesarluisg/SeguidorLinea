@@ -4,35 +4,45 @@
   * Description        : This file provides code for the MSP Initialization 
   *                      and de-Initialization codes.
   ******************************************************************************
-  ** This notice applies to any and all portions of this file
+  * This notice applies to any and all portions of this file
   * that are not between comment pairs USER CODE BEGIN and
   * USER CODE END. Other portions of this file, whether 
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * Copyright (c) 2018 STMicroelectronics International N.V. 
+  * All rights reserved.
   *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
+  * Redistribution and use in source and binary forms, with or without 
+  * modification, are permitted, provided that the following conditions are met:
   *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * 1. Redistribution of source code must retain the above copyright notice, 
+  *    this list of conditions and the following disclaimer.
+  * 2. Redistributions in binary form must reproduce the above copyright notice,
+  *    this list of conditions and the following disclaimer in the documentation
+  *    and/or other materials provided with the distribution.
+  * 3. Neither the name of STMicroelectronics nor the names of other 
+  *    contributors to this software may be used to endorse or promote products 
+  *    derived from this software without specific written permission.
+  * 4. This software, including modifications and/or derivative works of this 
+  *    software, must execute solely and exclusively on microcontroller or
+  *    microprocessor devices manufactured by or for STMicroelectronics.
+  * 5. Redistribution and use of this software other than as permitted under 
+  *    this license is void and will automatically terminate your rights under 
+  *    this license. 
+  *
+  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
+  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
+  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
+  * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
+  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
+  * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+  * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
+  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   *
   ******************************************************************************
   */
@@ -98,10 +108,9 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     PA0-WKUP     ------> ADC1_IN0
     PA1     ------> ADC1_IN1
     PA2     ------> ADC1_IN2
-    PA3     ------> ADC1_IN3
     PB1     ------> ADC1_IN9 
     */
-    GPIO_InitStruct.Pin = SENS_DER_1_Pin|SENS_DER_2_Pin|SENS_DER_3_Pin|SENS_IZQ_1_Pin;
+    GPIO_InitStruct.Pin = SENS_DER_1_Pin|SENS_DER_2_Pin|SENS_DER_3_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -122,12 +131,14 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     __HAL_RCC_ADC2_CLK_ENABLE();
   
     /**ADC2 GPIO Configuration    
+    PA3     ------> ADC2_IN3
     PA4     ------> ADC2_IN4
     PA5     ------> ADC2_IN5
     PA6     ------> ADC2_IN6
     PA7     ------> ADC2_IN7 
     */
-    GPIO_InitStruct.Pin = SENS_IZQ_2_Pin|SENS_IZQ_3_Pin|SENS_DER_4_Pin|SENS_IZQ_4_Pin;
+    GPIO_InitStruct.Pin = SENS_IZQ_1_Pin|SENS_IZQ_2_Pin|SENS_IZQ_3_Pin|SENS_DER_4_Pin 
+                          |SENS_IZQ_4_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -153,10 +164,9 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
     PA0-WKUP     ------> ADC1_IN0
     PA1     ------> ADC1_IN1
     PA2     ------> ADC1_IN2
-    PA3     ------> ADC1_IN3
     PB1     ------> ADC1_IN9 
     */
-    HAL_GPIO_DeInit(GPIOA, SENS_DER_1_Pin|SENS_DER_2_Pin|SENS_DER_3_Pin|SENS_IZQ_1_Pin);
+    HAL_GPIO_DeInit(GPIOA, SENS_DER_1_Pin|SENS_DER_2_Pin|SENS_DER_3_Pin);
 
     HAL_GPIO_DeInit(BAT_VOLTS_IN_GPIO_Port, BAT_VOLTS_IN_Pin);
 
@@ -173,12 +183,14 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
     __HAL_RCC_ADC2_CLK_DISABLE();
   
     /**ADC2 GPIO Configuration    
+    PA3     ------> ADC2_IN3
     PA4     ------> ADC2_IN4
     PA5     ------> ADC2_IN5
     PA6     ------> ADC2_IN6
     PA7     ------> ADC2_IN7 
     */
-    HAL_GPIO_DeInit(GPIOA, SENS_IZQ_2_Pin|SENS_IZQ_3_Pin|SENS_DER_4_Pin|SENS_IZQ_4_Pin);
+    HAL_GPIO_DeInit(GPIOA, SENS_IZQ_1_Pin|SENS_IZQ_2_Pin|SENS_IZQ_3_Pin|SENS_DER_4_Pin 
+                          |SENS_IZQ_4_Pin);
 
   /* USER CODE BEGIN ADC2_MspDeInit 1 */
 
@@ -252,11 +264,11 @@ void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef* htim_pwm)
 
 }
 
-void HAL_TIM_IC_MspInit(TIM_HandleTypeDef* htim_ic)
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
 {
 
   GPIO_InitTypeDef GPIO_InitStruct;
-  if(htim_ic->Instance==TIM3)
+  if(htim_base->Instance==TIM3)
   {
   /* USER CODE BEGIN TIM3_MspInit 0 */
 
@@ -278,7 +290,7 @@ void HAL_TIM_IC_MspInit(TIM_HandleTypeDef* htim_ic)
 
   /* USER CODE END TIM3_MspInit 1 */
   }
-  else if(htim_ic->Instance==TIM4)
+  else if(htim_base->Instance==TIM4)
   {
   /* USER CODE BEGIN TIM4_MspInit 0 */
 
@@ -373,10 +385,10 @@ void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef* htim_pwm)
 
 }
 
-void HAL_TIM_IC_MspDeInit(TIM_HandleTypeDef* htim_ic)
+void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
 {
 
-  if(htim_ic->Instance==TIM3)
+  if(htim_base->Instance==TIM3)
   {
   /* USER CODE BEGIN TIM3_MspDeInit 0 */
 
@@ -393,7 +405,7 @@ void HAL_TIM_IC_MspDeInit(TIM_HandleTypeDef* htim_ic)
 
   /* USER CODE END TIM3_MspDeInit 1 */
   }
-  else if(htim_ic->Instance==TIM4)
+  else if(htim_base->Instance==TIM4)
   {
   /* USER CODE BEGIN TIM4_MspDeInit 0 */
 
@@ -413,36 +425,59 @@ void HAL_TIM_IC_MspDeInit(TIM_HandleTypeDef* htim_ic)
 
 }
 
-void HAL_PCD_MspInit(PCD_HandleTypeDef* hpcd)
+void HAL_UART_MspInit(UART_HandleTypeDef* huart)
 {
 
-  if(hpcd->Instance==USB)
+  GPIO_InitTypeDef GPIO_InitStruct;
+  if(huart->Instance==USART1)
   {
-  /* USER CODE BEGIN USB_MspInit 0 */
+  /* USER CODE BEGIN USART1_MspInit 0 */
 
-  /* USER CODE END USB_MspInit 0 */
+  /* USER CODE END USART1_MspInit 0 */
     /* Peripheral clock enable */
-    __HAL_RCC_USB_CLK_ENABLE();
-  /* USER CODE BEGIN USB_MspInit 1 */
+    __HAL_RCC_USART1_CLK_ENABLE();
+  
+    /**USART1 GPIO Configuration    
+    PA9     ------> USART1_TX
+    PA10     ------> USART1_RX 
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_9;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /* USER CODE END USB_MspInit 1 */
+    GPIO_InitStruct.Pin = GPIO_PIN_10;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN USART1_MspInit 1 */
+
+  /* USER CODE END USART1_MspInit 1 */
   }
 
 }
 
-void HAL_PCD_MspDeInit(PCD_HandleTypeDef* hpcd)
+void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
 {
 
-  if(hpcd->Instance==USB)
+  if(huart->Instance==USART1)
   {
-  /* USER CODE BEGIN USB_MspDeInit 0 */
+  /* USER CODE BEGIN USART1_MspDeInit 0 */
 
-  /* USER CODE END USB_MspDeInit 0 */
+  /* USER CODE END USART1_MspDeInit 0 */
     /* Peripheral clock disable */
-    __HAL_RCC_USB_CLK_DISABLE();
-  /* USER CODE BEGIN USB_MspDeInit 1 */
+    __HAL_RCC_USART1_CLK_DISABLE();
+  
+    /**USART1 GPIO Configuration    
+    PA9     ------> USART1_TX
+    PA10     ------> USART1_RX 
+    */
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_9|GPIO_PIN_10);
 
-  /* USER CODE END USB_MspDeInit 1 */
+  /* USER CODE BEGIN USART1_MspDeInit 1 */
+
+  /* USER CODE END USART1_MspDeInit 1 */
   }
 
 }
