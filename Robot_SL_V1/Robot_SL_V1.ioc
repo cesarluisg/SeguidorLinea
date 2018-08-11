@@ -1,7 +1,7 @@
 #MicroXplorer Configuration settings - do not modify
-ADC1.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_0
+ADC1.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_2
 ADC1.Channel-4\#ChannelRegularConversion=ADC_CHANNEL_1
-ADC1.Channel-5\#ChannelRegularConversion=ADC_CHANNEL_2
+ADC1.Channel-5\#ChannelRegularConversion=ADC_CHANNEL_0
 ADC1.ContinuousConvMode=ENABLE
 ADC1.DataAlign=ADC_DATAALIGN_RIGHT
 ADC1.DiscontinuousConvMode=DISABLE

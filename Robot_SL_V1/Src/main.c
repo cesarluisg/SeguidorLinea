@@ -54,8 +54,10 @@
 /* USER CODE BEGIN Includes */
 #include "PID.h"
 
-#define SENSORES_ADC_COUNT	(8)
-#define SENSORES_COUNT		(6)
+#define SENSORES_ADC_COUNT				(8)
+#define SENSORES_LINEA_COUNT			(10)	/*6 Reales y 4 Virtuales */
+#define SENSORES_DIF_RAW_MIN			(1024)	/* Diferencia mínima entre máximo y mínimo para que exista línea*/
+#define SENSORES_MAXIMOS_CONTADOS_MAX	(10)	/* número máximo de Maximos para promediar */
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -73,7 +75,20 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-uint16_t	Sensores_ADC_raw[SENSORES_ADC_COUNT];	//Valores tomados de los ADC
+/*** SENSORES BEGIN PV ***/
+enum enumSensores_ID {	SENS_V_IZQ_5, SENS_V_IZQ_4, SENS_IZQ_3 ,SENS_IZQ_2,	SENS_IZQ_1,	SENS_DER_1,	SENS_DER_2, SENS_DER_3, SENS_V_DER_4, SENS_V_DER_5};
+enum enumSensores_States {SENSORES_POS_LINEA_CENTRO, SENSORES_POS_LINEA_IZQ, SENSORES_POS_LINEA_DER};
+enum enumSensoresError {SENSORES_ERROR_SUCCESS = 0};
+
+struct sensores_struct {
+	uint16_t maximo_historico; //Valor máximo de la medición de los sensores
+	uint16_t ADC_raw[SENSORES_LINEA_COUNT];	//Valores tomados de los ADC
+	int16_t posicion_x[SENSORES_LINEA_COUNT]; //Valores fijos de la posición real de los sensores en décimas de milímetro
+	uint8_t pos_linea; //Guarda la posicón de la línea respecto al centro
+	uint32_t maximo_historico_acum;
+	uint8_t maximos_contados;
+} SensoresData;
+/*** SENSORES END PV ***/
 
 /* USER CODE END PV */
 
@@ -98,7 +113,10 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void calcVel(int velMax, int velMin, double newCorrection);
 int increasePower(int currPowMax);
 
+/*** SENSORES BEGIN PFP ***/
 int16_t sensoresGetValActual(void); //Retorna valor de los sensores
+enum enumSensoresError sensoresReadyToRace(void); //Reinicia el módulo para iniciar una carrera.
+/*** SENSORES END PFP***/
 
 /* USER CODE END PFP */
 
@@ -134,6 +152,24 @@ int main(void)
 	int powMax = RACE_POWER_SET_VALUE;
 	int powMin = MIN_POWER_VALUE;
 
+	/*** SENSORES USER CODE BEGIN 1 ***/
+	//Inicializo posiciones de los sensores respecto del centro del robot, en décimas de milímetros
+	SensoresData.posicion_x[SENS_V_IZQ_5] = -450;
+	SensoresData.posicion_x[SENS_V_IZQ_4] = -350;
+	SensoresData.posicion_x[SENS_IZQ_3] = -250;
+	SensoresData.posicion_x[SENS_IZQ_2] = -150;
+	SensoresData.posicion_x[SENS_IZQ_1] = -50;
+	SensoresData.posicion_x[SENS_DER_1] = 50;
+	SensoresData.posicion_x[SENS_DER_2] = 150;
+	SensoresData.posicion_x[SENS_DER_3] = 250;
+	SensoresData.posicion_x[SENS_V_DER_4] = 350;
+	SensoresData.posicion_x[SENS_V_DER_5] = 450;
+	SensoresData.maximo_historico = 0;
+	SensoresData.pos_linea = SENSORES_POS_LINEA_CENTRO;
+	SensoresData.maximo_historico_acum = 0;
+	SensoresData.maximos_contados = 0;
+	/*** SENSORES USER CODE END 1 ***/
+
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -161,7 +197,6 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_USART1_UART_Init();
   MX_RTC_Init();
-
   /* USER CODE BEGIN 2 */
 
   //int readSpeed = 0;
@@ -206,8 +241,6 @@ int main(void)
   /* USER CODE END 2 */
 
   /* Infinite loop */
-  while (true)
-  {
   /* USER CODE BEGIN WHILE */
 		/* Check Mode */
 		switch (_driverMode) {
@@ -285,7 +318,6 @@ int main(void)
   /* USER CODE BEGIN 3 */
   /* USER CODE END 3 */
 
-  }
 }
 
 /**
@@ -372,7 +404,7 @@ static void MX_ADC1_Init(void)
 
     /**Configure Regular Channel 
     */
-  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -391,7 +423,7 @@ static void MX_ADC1_Init(void)
 
     /**Configure Regular Channel 
     */
-  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = ADC_REGULAR_RANK_3;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -784,52 +816,138 @@ void debugPrint(char _out[]){
  HAL_UART_Transmit(&huart1, (uint8_t *)_out, strlen(_out), 100);
 }
 
+enum enumSensoresError sensoresReadyToRace(void)
+{
+	//Reiniciar el máximo histórico
+	SensoresData.maximo_historico = 0;
+	SensoresData.maximo_historico_acum = 0;
+	SensoresData.maximos_contados = 0;
+	return SENSORES_ERROR_SUCCESS;
+}
+
+/**
+ * @brief Esta función devuelve el valor actual de los sensores, marcando la diferencia de la
+ * posición de la línea con el centro, entre MIN_SENSOR_VALUE y MAX_SENSOR_VALUE
+ * @param void: sin parámetros
+ */
 int16_t sensoresGetValActual(void)
 {
 	int16_t valActual = 0;
-	unsigned long int promedio = 0;
-	   //Inicio de toma de valores de los ADC
+	uint16_t maximo = 0, minimo = 0;
+	unsigned long int sumaproductovalores = 0, sumavalores = 0, centro = 0;
+
+	//Inicio de toma de valores de los ADC
 
 	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_SET);
 	HAL_ADC_Start(&hadc1);
 
 	HAL_ADC_PollForConversion(&hadc1, 1);
-	Sensores_ADC_raw[0] = HAL_ADC_GetValue(&hadc1);
+	SensoresData.ADC_raw[SENS_IZQ_3] = HAL_ADC_GetValue(&hadc1);
 
 	HAL_ADC_PollForConversion(&hadc1, 1);
-	Sensores_ADC_raw[1] = HAL_ADC_GetValue(&hadc1);
+	SensoresData.ADC_raw[SENS_IZQ_2] = HAL_ADC_GetValue(&hadc1);
 
 	HAL_ADC_PollForConversion(&hadc1, 1);
-	Sensores_ADC_raw[2] = HAL_ADC_GetValue(&hadc1);
+	SensoresData.ADC_raw[SENS_IZQ_1] = HAL_ADC_GetValue(&hadc1);
 
 	HAL_ADC_Stop(&hadc1);
 
 	HAL_ADC_Start(&hadc2);
 
 	HAL_ADC_PollForConversion(&hadc2, 1);
-	Sensores_ADC_raw[3] = HAL_ADC_GetValue(&hadc2);
+	SensoresData.ADC_raw[SENS_DER_1] = HAL_ADC_GetValue(&hadc2);
 
 	HAL_ADC_PollForConversion(&hadc2, 1);
-	Sensores_ADC_raw[4] = HAL_ADC_GetValue(&hadc2);
+	SensoresData.ADC_raw[SENS_DER_2] = HAL_ADC_GetValue(&hadc2);
 
 	HAL_ADC_PollForConversion(&hadc2, 1);
-	Sensores_ADC_raw[5] = HAL_ADC_GetValue(&hadc2);
+	SensoresData.ADC_raw[SENS_DER_3] = HAL_ADC_GetValue(&hadc2);
 
 	HAL_ADC_Stop(&hadc2);
 
 	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_RESET);
 
-	//Cálculo de Valor actual
-	//Se determina en relación a que los sensores del centro deben estar sobre la línea
-
-	//1ro Promedio
-	for(uint8_t i = 0; i < SENSORES_COUNT; i++)
+	//Cálculo máximo y mínimo
+	for (uint8_t i = SENS_IZQ_3; i <= SENS_DER_3; i++ )
 	{
-		promedio += Sensores_ADC_raw[i];
+		if (SensoresData.ADC_raw[i] < minimo)
+		{
+			minimo = SensoresData.ADC_raw[i];
+		}
+		else if (SensoresData.ADC_raw[i] > maximo)
+		{
+			maximo = SensoresData.ADC_raw[i];
+		}
 	}
-	promedio /= SENSORES_COUNT;
 
-	//2do Los valores por debajo del promedio los elimino
+
+	//Cálculo de Valor actual
+	//Se calcula como un centro de gravedad de la señal de cada sensor
+
+	//1ro Calculo suma de productos de cada valor del sensor por la distancia al centro de los sensores
+	for(uint8_t i = 0; i < SENSORES_LINEA_COUNT; i++)
+	{
+		sumaproductovalores += SensoresData.ADC_raw[i] * SensoresData.posicion_x[i];
+		sumavalores += SensoresData.ADC_raw[i];
+	}
+	//Valor del centro de gravedad de los sensores
+	centro = sumaproductovalores / sumavalores;
+
+
+	//Determinación de última posición relativa de la línea según las mediciones actuales,
+	//de lo contrario, si no ve más la línea recuerda la última posición y el máximo histórico
+	if((maximo - minimo) > SENSORES_DIF_RAW_MIN)
+	{
+		if(valActual > SensoresData.posicion_x[SENS_DER_2])
+		{
+			//Si el centro de la línea está más allá del segundo sensor derecho
+			SensoresData.pos_linea = SENSORES_POS_LINEA_DER;
+		}
+		else if (valActual < SensoresData.posicion_x[SENS_IZQ_2])
+		{
+			//Si el centro de la línea está más allá del segundo sensor izquierdo
+			SensoresData.pos_linea = SENSORES_POS_LINEA_IZQ;
+		}
+		else
+		{
+			//Si el centro de la línea está entre el segundo sensor izquierdo y el segundo sensor derecho.
+			SensoresData.pos_linea = SENSORES_POS_LINEA_CENTRO;
+		}
+
+		//Mantenimiento de maximo histórico
+		if (SensoresData.maximo_historico == 0)
+		{
+			SensoresData.maximo_historico = maximo;
+			SensoresData.maximo_historico_acum = maximo;
+			SensoresData.maximos_contados = 1;
+		}
+		else
+		{
+			if (SensoresData.maximos_contados < SENSORES_MAXIMOS_CONTADOS_MAX)
+			{
+				SensoresData.maximos_contados++;
+			}
+			else
+			{
+				//Le resto un valor medio al acum de los máximos
+				SensoresData.maximo_historico_acum = SensoresData.maximo_historico_acum / SENSORES_MAXIMOS_CONTADOS_MAX * (SENSORES_MAXIMOS_CONTADOS_MAX - 1);
+			}
+			SensoresData.maximo_historico = (maximo + SensoresData.maximo_historico_acum) / SensoresData.maximos_contados;
+			SensoresData.maximo_historico_acum = SensoresData.maximo_historico * SensoresData.maximos_contados;
+		}
+	}
+
+	//LOGICA AGREGADA PARA MEJORAR PERFORMANCE
+	//Se agregan 4 sensores virtuales más, simulando los que no están a la izquierda y a la derecha,
+	//quedarán indicando el máximo valor, tanto a izquierda como a derecha, si pierden la línea
+	//Sólo se encenderán si la línea no está en posiciones centrales (SENSORES_POS_LINEA_CENTRO).
+	SensoresData.ADC_raw[SENS_V_IZQ_5] = (SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_IZQ_3] + minimo):0;
+	SensoresData.ADC_raw[SENS_V_IZQ_4] = (SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_IZQ_2] + minimo):0;
+	SensoresData.ADC_raw[SENS_V_DER_4] = (SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_DER_2] + minimo):0;
+	SensoresData.ADC_raw[SENS_V_DER_5] = (SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_DER_3] + minimo):0;
+
+	//Escalado del valor actual para devolver a función llamadora
+	valActual = (int16_t)centro * MAX_SENSOR_VALUE / 250;
 
 	return valActual;
 }
