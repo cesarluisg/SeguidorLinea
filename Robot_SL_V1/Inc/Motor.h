@@ -12,7 +12,7 @@
 #define MOTOR_DERECHO	2
 
 enum enum_motor_freno {MOTOR_FRENO_FRENAR, MOTOR_FRENO_LIBERAR};
-enum enum_motor_error {MOTOR_SUCCESS};
+enum enum_motor_error {MOTOR_ERR_SUCCESS};
 
 class Motor {
 private:

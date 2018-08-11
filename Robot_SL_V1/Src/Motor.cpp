@@ -19,15 +19,15 @@ Motor::~Motor() {
 
 enum_motor_error Motor::setPotencia(unsigned short int potencia)
 {
-	return MOTOR_SUCCESS;
+	return MOTOR_ERR_SUCCESS;
 }
 
 enum_motor_error Motor::setFreno(enum_motor_freno freno)
 {
-	return MOTOR_SUCCESS;
+	return MOTOR_ERR_SUCCESS;
 }
 
 enum_motor_error setMotorNumber(int motorId)
 {
-	return MOTOR_SUCCESS;
+	return MOTOR_ERR_SUCCESS;
 }

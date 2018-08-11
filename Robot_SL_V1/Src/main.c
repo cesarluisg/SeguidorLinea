@@ -54,10 +54,7 @@
 /* USER CODE BEGIN Includes */
 #include "PID.h"
 
-#define SENSORES_ADC_COUNT				(8)
-#define SENSORES_LINEA_COUNT			(10)	/*6 Reales y 4 Virtuales */
-#define SENSORES_DIF_RAW_MIN			(1024)	/* Diferencia mínima entre máximo y mínimo para que exista línea*/
-#define SENSORES_MAXIMOS_CONTADOS_MAX	(10)	/* número máximo de Maximos para promediar */
+
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -75,10 +72,36 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
+/*** MOTORES BEGIN PV ***/
+typedef enum enumMotorID {MOTOR_ID_NOVALID,
+							MOTOR_IZQ_ID,
+							MOTOR_DER_ID} enumMotorID;
+
+typedef enum enumMotorFreno {MOTOR_FRENO_FRENAR,
+							MOTOR_FRENO_LIBERAR} enumMotorFreno;
+
+typedef enum enumMotorError {MOTOR_ERR_SUCCESS,
+							MOTOR_ERR_ID_INVALID,
+							MOTOR_ERR_POT_OUT_OF_RANGE,
+							MOTOR_ERR_FRENO_ST_NOTVALID} enumMotorError;
+
+enum enumMotorFrenoState {MOTOR_FRENO_ST_LIBERADO,
+							MOTOR_FRENO_ST_FRENADO};
+
+struct motores_struct
+{
+	uint8_t freno_state[MOTOR_DER_ID];	//Valores admitidos para freno_state: enumMotorFrenoState
+	uint8_t	potencia[MOTOR_DER_ID];		//Potencia actual de cada motor
+	GPIO_TypeDef * frenoPinPort[MOTOR_DER_ID];		//Puerto del freno correspondiente
+	uint16_t frenoPin[MOTOR_DER_ID];			//frenoPin del puerto
+} MotoresData;
+
+/*** MOTORES END PV ***/
+
 /*** SENSORES BEGIN PV ***/
-enum enumSensores_ID {	SENS_V_IZQ_5, SENS_V_IZQ_4, SENS_IZQ_3 ,SENS_IZQ_2,	SENS_IZQ_1,	SENS_DER_1,	SENS_DER_2, SENS_DER_3, SENS_V_DER_4, SENS_V_DER_5};
-enum enumSensores_States {SENSORES_POS_LINEA_CENTRO, SENSORES_POS_LINEA_IZQ, SENSORES_POS_LINEA_DER};
-enum enumSensoresError {SENSORES_ERROR_SUCCESS = 0};
+typedef enum enumSensores_ID {SENS_V_IZQ_5, SENS_V_IZQ_4, SENS_IZQ_3 ,SENS_IZQ_2,	SENS_IZQ_1,	SENS_DER_1,	SENS_DER_2, SENS_DER_3, SENS_V_DER_4, SENS_V_DER_5} enumSensores_ID;
+typedef enum enumSensores_States {SENSORES_POS_LINEA_CENTRO, SENSORES_POS_LINEA_IZQ, SENSORES_POS_LINEA_DER} enumSensores_States;
+typedef enum enumSensoresError {SENSORES_ERROR_SUCCESS = 0} enumSensoresError;
 
 struct sensores_struct {
 	uint16_t maximo_historico; //Valor máximo de la medición de los sensores
@@ -113,10 +136,17 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void calcVel(int velMax, int velMin, double newCorrection);
 int increasePower(int currPowMax);
 
-/*** SENSORES BEGIN PFP ***/
-int16_t sensoresGetValActual(void); //Retorna valor de los sensores
-enum enumSensoresError sensoresReadyToRace(void); //Reinicia el módulo para iniciar una carrera.
-/*** SENSORES END PFP***/
+/*** SENSORES AND MOTORES BEGIN PFP ***/
+
+enumMotorError motorInit (void); //Inicializa estructura de motores
+enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st); //Setea estado del freno del motor correspondiente
+enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia); //Setea potencia del motor correspondiente
+
+enumSensoresError sensoresInit(); //Inicializa estructura de Sensores
+enumSensoresError sensoresReadyToRace(void); //Reinicia el módulo para iniciar una carrera.
+int16_t sensoresGetValActual(void); //Retorna posición de la línea relativa al centro del robot (valores entre -100 y 100)
+
+/*** SENSORES AND MOTORES END PFP***/
 
 /* USER CODE END PFP */
 
@@ -135,6 +165,7 @@ enum enumSensoresError sensoresReadyToRace(void); //Reinicia el módulo para inic
 /* Driver Mode */
 int _driverMode;
 
+
 /* USER CODE END 0 */
 
 /**
@@ -152,24 +183,9 @@ int main(void)
 	int powMax = RACE_POWER_SET_VALUE;
 	int powMin = MIN_POWER_VALUE;
 
-	/*** SENSORES USER CODE BEGIN 1 ***/
-	//Inicializo posiciones de los sensores respecto del centro del robot, en décimas de milímetros
-	SensoresData.posicion_x[SENS_V_IZQ_5] = -450;
-	SensoresData.posicion_x[SENS_V_IZQ_4] = -350;
-	SensoresData.posicion_x[SENS_IZQ_3] = -250;
-	SensoresData.posicion_x[SENS_IZQ_2] = -150;
-	SensoresData.posicion_x[SENS_IZQ_1] = -50;
-	SensoresData.posicion_x[SENS_DER_1] = 50;
-	SensoresData.posicion_x[SENS_DER_2] = 150;
-	SensoresData.posicion_x[SENS_DER_3] = 250;
-	SensoresData.posicion_x[SENS_V_DER_4] = 350;
-	SensoresData.posicion_x[SENS_V_DER_5] = 450;
-	SensoresData.maximo_historico = 0;
-	SensoresData.pos_linea = SENSORES_POS_LINEA_CENTRO;
-	SensoresData.maximo_historico_acum = 0;
-	SensoresData.maximos_contados = 0;
-	/*** SENSORES USER CODE END 1 ***/
-
+	/*** SENSORES AND MOTORS USER CODE BEGIN 1 ***/
+	motorInit();
+	sensoresInit();
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -517,7 +533,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 24;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 200;
+  htim1.Init.Period = MOTOR_PWM_STEPS;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -571,7 +587,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 24;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 200;
+  htim2.Init.Period = MOTOR_PWM_STEPS;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
@@ -808,6 +824,113 @@ int increasePower(int currPowMax)
 	    return newPower;
 }
 
+/*** MOTORES FUNCTION DEF BEGIN ***/
+/**
+ * @brief Esta función inicializa la estructura de los motores
+ * @param motor_ID: MOTOR_IZQ_ID ó MOTOR_DER_ID
+ * @param potencia: Potencia a inyectar al motor, desde 0 a MOTOR_POT_MAX
+ */
+enumMotorError motorInit (void)
+{
+
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+
+	MotoresData.frenoPinPort[MOTOR_DER_ID] = Freno_DER_GPIO_Port;
+	MotoresData.frenoPin[MOTOR_DER_ID] = Freno_DER_Pin;
+	MotoresData.frenoPinPort[MOTOR_IZQ_ID] = Freno_IZQ_GPIO_Port;
+	MotoresData.frenoPin[MOTOR_IZQ_ID] = Freno_IZQ_Pin;
+
+	return MOTOR_ERR_SUCCESS;
+}
+
+/**
+ * @brief Esta función envía potencia a los motores en PWM
+ * @param motor_ID: MOTOR_IZQ_ID ó MOTOR_DER_ID
+ * @param potencia: Potencia a inyectar, desde 0 a MOTOR_POT_MAX
+ */
+enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
+{
+	//Verifico ID del motor
+	if(motor_ID != MOTOR_IZQ_ID || motor_ID != MOTOR_DER_ID)
+	{
+		return MOTOR_ERR_ID_INVALID;
+	}
+
+	//Verifico estado del freno
+	if(MotoresData.freno_state[motor_ID] == MOTOR_FRENO_ST_FRENADO)
+	{
+		//Liberar freno si está seteado
+		HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_LIBERAR);
+	}
+
+	//Cambiar PWM del motor indicado a la potencia especificada
+	if (potencia <= MOTOR_POT_MAX)
+	{
+		if(motor_ID == MOTOR_DER_ID)
+		{
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
+		}
+		else
+		{
+			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
+		}
+	}
+	else
+	{
+		return MOTOR_ERR_POT_OUT_OF_RANGE;
+	}
+
+	return MOTOR_ERR_SUCCESS;
+}
+
+/**
+ * @brief Esta función frena el motor especificado
+ * @param motor_ID: MOTOR_IZQ_ID ó MOTOR_DER_ID
+ * @param freno_st: Estado en que se quiere poner el freno (enumMotorFreno)
+ */
+enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st)
+{
+	//Verificar ID del motor
+	if(motor_ID != MOTOR_IZQ_ID || motor_ID != MOTOR_DER_ID)
+	{
+		return MOTOR_ERR_ID_INVALID;
+	}
+
+
+	//Setear estado del freno
+	if (freno_st == MOTOR_FRENO_FRENAR)
+	{
+		//Cortar PWM del motor correspondiente si tiene algún valor
+
+		if(motor_ID == MOTOR_DER_ID)
+		{
+			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+		}
+		else
+		{
+			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+		}
+
+		//Efectuar frenado
+		HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_FRENAR);
+	}
+	else if (freno_st == MOTOR_FRENO_LIBERAR)
+	{
+		//Liberar freno
+		HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_LIBERAR);
+	}
+	else
+	{
+		return MOTOR_ERR_FRENO_ST_NOTVALID;
+	}
+
+	return MOTOR_ERR_SUCCESS;
+}
+/*** MOTORES FUNCTION DEF END ***/
+
+/*** SENSORES FUNCTION DEF BEGIN ***/
+
 /**
  * @brief Esta función imprime por el puerto serie el array de caracteres enviado en _out
  * @param _out: puntero a la cadena de caracteres a imprimir finalizada en null
@@ -815,6 +938,37 @@ int increasePower(int currPowMax)
 void debugPrint(char _out[]){
  HAL_UART_Transmit(&huart1, (uint8_t *)_out, strlen(_out), 100);
 }
+
+
+/**
+ * @brief Esta función Inicializa la estructura inicial de los sensores.
+ */
+
+enumSensoresError sensoresInit(void)
+{
+	//Inicializo posiciones de los sensores respecto del centro del robot, en décimas de milímetros
+	SensoresData.posicion_x[SENS_V_IZQ_5] = -450;
+	SensoresData.posicion_x[SENS_V_IZQ_4] = -350;
+	SensoresData.posicion_x[SENS_IZQ_3] = -250;
+	SensoresData.posicion_x[SENS_IZQ_2] = -150;
+	SensoresData.posicion_x[SENS_IZQ_1] = -50;
+	SensoresData.posicion_x[SENS_DER_1] = 50;
+	SensoresData.posicion_x[SENS_DER_2] = 150;
+	SensoresData.posicion_x[SENS_DER_3] = 250;
+	SensoresData.posicion_x[SENS_V_DER_4] = 350;
+	SensoresData.posicion_x[SENS_V_DER_5] = 450;
+	SensoresData.maximo_historico = 0;
+	SensoresData.pos_linea = SENSORES_POS_LINEA_CENTRO;
+	SensoresData.maximo_historico_acum = 0;
+	SensoresData.maximos_contados = 0;
+
+	return SENSORES_ERROR_SUCCESS;
+}
+
+
+/**
+ * @brief Esta función Inicializa variables de los sensores para dejarlo listo para largar.
+ */
 
 enum enumSensoresError sensoresReadyToRace(void)
 {
@@ -839,6 +993,7 @@ int16_t sensoresGetValActual(void)
 	//Inicio de toma de valores de los ADC
 
 	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_SET);
+
 	HAL_ADC_Start(&hadc1);
 
 	HAL_ADC_PollForConversion(&hadc1, 1);
@@ -951,6 +1106,9 @@ int16_t sensoresGetValActual(void)
 
 	return valActual;
 }
+
+/*** SENSORES FUNCTION DEF END ***/
+
 /* USER CODE END 4 */
 
 /**
