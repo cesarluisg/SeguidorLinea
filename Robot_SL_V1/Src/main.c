@@ -53,6 +53,9 @@
 
 /* USER CODE BEGIN Includes */
 #include "PID.h"
+
+#define SENSORES_ADC_COUNT	(8)
+#define SENSORES_COUNT		(6)
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -69,6 +72,9 @@ TIM_HandleTypeDef htim4;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
+
+uint16_t	Sensores_ADC_raw[SENSORES_ADC_COUNT];	//Valores tomados de los ADC
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -91,6 +97,8 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 void calcVel(int velMax, int velMin, double newCorrection);
 int increasePower(int currPowMax);
+
+int16_t sensoresGetValActual(void); //Retorna valor de los sensores
 
 /* USER CODE END PFP */
 
@@ -768,6 +776,63 @@ int increasePower(int currPowMax)
 	    return newPower;
 }
 
+/**
+ * @brief Esta función imprime por el puerto serie el array de caracteres enviado en _out
+ * @param _out: puntero a la cadena de caracteres a imprimir finalizada en null
+ */
+void debugPrint(char _out[]){
+ HAL_UART_Transmit(&huart1, (uint8_t *)_out, strlen(_out), 100);
+}
+
+int16_t sensoresGetValActual(void)
+{
+	int16_t valActual = 0;
+	unsigned long int promedio = 0;
+	   //Inicio de toma de valores de los ADC
+
+	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_SET);
+	HAL_ADC_Start(&hadc1);
+
+	HAL_ADC_PollForConversion(&hadc1, 1);
+	Sensores_ADC_raw[0] = HAL_ADC_GetValue(&hadc1);
+
+	HAL_ADC_PollForConversion(&hadc1, 1);
+	Sensores_ADC_raw[1] = HAL_ADC_GetValue(&hadc1);
+
+	HAL_ADC_PollForConversion(&hadc1, 1);
+	Sensores_ADC_raw[2] = HAL_ADC_GetValue(&hadc1);
+
+	HAL_ADC_Stop(&hadc1);
+
+	HAL_ADC_Start(&hadc2);
+
+	HAL_ADC_PollForConversion(&hadc2, 1);
+	Sensores_ADC_raw[3] = HAL_ADC_GetValue(&hadc2);
+
+	HAL_ADC_PollForConversion(&hadc2, 1);
+	Sensores_ADC_raw[4] = HAL_ADC_GetValue(&hadc2);
+
+	HAL_ADC_PollForConversion(&hadc2, 1);
+	Sensores_ADC_raw[5] = HAL_ADC_GetValue(&hadc2);
+
+	HAL_ADC_Stop(&hadc2);
+
+	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_RESET);
+
+	//Cálculo de Valor actual
+	//Se determina en relación a que los sensores del centro deben estar sobre la línea
+
+	//1ro Promedio
+	for(uint8_t i = 0; i < SENSORES_COUNT; i++)
+	{
+		promedio += Sensores_ADC_raw[i];
+	}
+	promedio /= SENSORES_COUNT;
+
+	//2do Los valores por debajo del promedio los elimino
+
+	return valActual;
+}
 /* USER CODE END 4 */
 
 /**
