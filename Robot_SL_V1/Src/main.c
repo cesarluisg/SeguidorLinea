@@ -149,7 +149,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 /* USER CODE BEGIN PFP */
 
 void calcVel(int velMax, int velMin, double newCorrection);
-int increasePower(int currPowMax);
+int changeMaxPower(int currPowMax);
 
 void debugPrint(char _out[]);
 
@@ -181,7 +181,7 @@ enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st);
 #define MIN_SENSOR_VALUE		(-1000)
 
 /* Speed range defines */
-#define RACE_POWER_SET_VALUE	70
+#define RACE_POWER_SET_VALUE	40
 #define MAX_POWER_VALUE			100
 #define MIN_POWER_VALUE			0
 
@@ -200,7 +200,6 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 
-	double sensorValue = 0;
 	double correction = 0;
 
 	int powMax = RACE_POWER_SET_VALUE;
@@ -244,6 +243,7 @@ int main(void)
   ledsInit();
   /*** SENSORES AND MOTORS USER CODE END 1 ***/
 
+  /* Driver Modde default value */
   _driverMode = RACE_MODE;
   /* PID init */
   pidInit();
@@ -253,35 +253,23 @@ int main(void)
   /* Sensor get PID */
   if (true != pidGetPID(&pidSensores))
   	return -1;
-  /* PID Sensor set */
-  pidSet( pidSensores, 0, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1, 0.250, 0.5, 0, 0);
+  /* PID Sensor set default value */
+  pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.6, 0.02, 0.01, 0, 0);
 
-#if 0
-  /* Rueda Izq PID pointer */
-  PID_s *pidRuedaIzq;
-  /* Rueda get PID */
-  if (true != pidGetPID(&pidRuedaIzq))
-  	return ERROR_FAIL;
-  /* PID Sensor set */
-  pidSet( pidRuedaIzq, 0, 100, 20, 5, 5, 5, 0, 0);
+  uint16_t SensorValorActual;
 
-  /* Rueda Der PID pointer */
-  PID_s *pidRuedaDer;
-  /* Rueda get PID */
-  if (true != pidGetPID(&pidRuedaDer))
-  	return -1;
-  /* PID Sensor set */
-  pidSet( pidRuedaDer, 0, 100, 20, 5, 5, 5, 0, 0);
-#endif
-
-  //TEST Potencia de motor
+  /* Set motor defualt value */
   motorSetPotencia(MOTOR_DER_ID, 1);
   motorSetPotencia(MOTOR_IZQ_ID, 1);
-  debugPrint("Seguidor de Linea \n");
+
+  //debugPrint("Seguidor de Linea \n");
+  //char mensaje[200];
+  //uint16_t valorActualTest;
+
+
   //ledsSet(LED_1_ID, LED_ST_OFF);
   //ledsSet(LED_2_ID, LED_ST_OFF);
-  char mensaje[200];
-  uint16_t valorActualTest;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -295,22 +283,35 @@ int main(void)
 	  //ledsSet(LED_1_ID, LED_ST_ON);
 	  //ledsSet(LED_2_ID, LED_ST_ON);
 
-	  valorActualTest = sensoresGetValActual();
-	  sprintf(mensaje, "%06d \r", valorActualTest);
+	  //valorActualTest = sensoresGetValActual();
+	  //sprintf(mensaje, "%06d \r", valorActualTest);
 	  //debugPrint(mensaje);
+	  //HAL_Delay(250);
 
-	  HAL_Delay(250);
 	  /* Check Mode */
 		switch (_driverMode) {
 			case ERROR_MODE:
 				/* Error mode, display error */
 				//setLed();
-				_driverMode = RACE_MODE;
+
+				/* Set motor defualt value */
+				motorSetPotencia(MOTOR_DER_ID, 1);
+				motorSetPotencia(MOTOR_IZQ_ID, 1);
+				/* Go to Pre Race Mode */
+				_driverMode = PRE_RACE_MODE;
 				break;
 
 			case CALIBRATE_SENSOR_MODE:
 				/* Calibrate Sensor Mode */
 				//setLed();
+
+				/*Por ahora no tenemos esta funcionalidad, pero no se queda frenadoe en este punto y vuelve a PRE_RACE_MODE */
+
+				/* Set motor defualt value */
+				motorSetPotencia(MOTOR_DER_ID, 1);
+				motorSetPotencia(MOTOR_IZQ_ID, 1);
+				/* Go to Pre Race Mode */
+				_driverMode = PRE_RACE_MODE;
 				break;
 
 			case PRE_RACE_MODE:
@@ -319,22 +320,35 @@ int main(void)
 				/* Led status Race Mode */
 				//setLed();
 
+				ledsSet(LED_1_ID, LED_ST_ON);
+				ledsSet(LED_2_ID, LED_ST_OFF);
+
+
 				/* Wait for Button To change Max Power to Motor */
 				if(false) /*  */
 				{
 					/* take new power value */
-					powMax = increasePower(powMax);
+					powMax = changeMaxPower(powMax);
 
 					/* Led Power Value */
 					//setLedBLink(powMax/ledFrequency);
 				}
 
 				/* Wait for Button ON to RUN */
-				if(false) /* Is button change mode on? */
+				if(true) /* Is button change mode on? */
 				{
 					//Example pidSet (pidSensores, 0.1, 100, -100, 0.6, 0.02, 0.1, 0, 0);
+
 					/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
 					pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.6, 0.02, 0.01, 0, 0);
+
+					/* default Value */
+					correction = 0;
+
+					/* Set motor Race max value */
+					motorSetPotencia(MOTOR_DER_ID, MAX_POWER_VALUE);
+					motorSetPotencia(MOTOR_IZQ_ID, MAX_POWER_VALUE);
+
 					/* Go to Race */
 					_driverMode = RACE_MODE;
 				}
@@ -343,12 +357,11 @@ int main(void)
 			case RACE_MODE:
 				/* Race Mode */
 
-			    /* TODO Cesar */
 				/* Get sensor error */
-				// sensorValue = mySensores.getValue();
+				SensorValorActual = sensoresGetValActual();
 
 				/* Calculate error PID */
-				correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, sensorValue);
+				correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, (double) SensorValorActual);
 
 				/* Calculate velocity of a motors and set values */
 				calcVel(powMax, powMin, correction);
@@ -837,8 +850,8 @@ void calcVel(int powMax, int powMin, double newCorrection)
     int velMotorIzq = powMax;
     int velMotorDer = powMax;
 
-    /* newCorrection es bueno que sea un double asi se puede multiplicar por un fraccional */
-    newCorrection = newCorrection * 1.5;
+    /* newCorrection es bueno que sea un double asi se puede multiplicar o dividir por un fraccional */
+    newCorrection = newCorrection/5;
 
     if(newCorrection > 0)
     {
@@ -857,12 +870,13 @@ void calcVel(int powMax, int powMin, double newCorrection)
         }
     }
 
-    /* TODO Cesar */
-    //MotorDer.setPotencia((unsigned short int) velMotorDer);
-    //MotorIzq.setPotencia((unsigned short int) velMotorIzq);
+    /* Set motor power */
+	motorSetPotencia(MOTOR_DER_ID, velMotorDer);
+	motorSetPotencia(MOTOR_IZQ_ID, velMotorIzq);
+
 }
 
-int increasePower(int currPowMax)
+int changeMaxPower(int currPowMax)
 {
 	 int newPower = currPowMax;
 	    /* increase power on 10% */
@@ -1212,24 +1226,24 @@ int16_t sensoresGetValActual(void)
 	}
 
 
-	sprintf(mensaje, "%05d %05d %05d %012ld %012ld %04d %04d %04d %04d %04d %04d %04d %04d %04d %04d %c\r\n",
-												valActual,
-												maximo,
-												minimo,
-												SensoresData.maximo_historico,
-												sumavalores,
-												SensoresData.ADC_fil[SENS_V_IZQ_5],
-												SensoresData.ADC_fil[SENS_V_IZQ_4],
-												SensoresData.ADC_fil[SENS_IZQ_3],
-												SensoresData.ADC_fil[SENS_IZQ_2],
-												SensoresData.ADC_fil[SENS_IZQ_1],
-												SensoresData.ADC_fil[SENS_DER_1],
-												SensoresData.ADC_fil[SENS_DER_2],
-												SensoresData.ADC_fil[SENS_DER_3],
-												SensoresData.ADC_fil[SENS_V_DER_4],
-												SensoresData.ADC_fil[SENS_V_DER_5],
-												(SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?'i':(SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?'d':'c');
-	debugPrint(mensaje);
+//	sprintf(mensaje, "%05d %05d %05d %012ld %012ld %04d %04d %04d %04d %04d %04d %04d %04d %04d %04d %c\r\n",
+//												valActual,
+//												maximo,
+//												minimo,
+//												SensoresData.maximo_historico,
+//												sumavalores,
+//												SensoresData.ADC_fil[SENS_V_IZQ_5],
+//												SensoresData.ADC_fil[SENS_V_IZQ_4],
+//												SensoresData.ADC_fil[SENS_IZQ_3],
+//												SensoresData.ADC_fil[SENS_IZQ_2],
+//												SensoresData.ADC_fil[SENS_IZQ_1],
+//												SensoresData.ADC_fil[SENS_DER_1],
+//												SensoresData.ADC_fil[SENS_DER_2],
+//												SensoresData.ADC_fil[SENS_DER_3],
+//												SensoresData.ADC_fil[SENS_V_DER_4],
+//												SensoresData.ADC_fil[SENS_V_DER_5],
+//												(SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?'i':(SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?'d':'c');
+//	debugPrint(mensaje);
 
 	//Escalado de valor actual
 	valActual = valActual * MAX_SENSOR_VALUE / abs(SensoresData.posicion_x[SENS_DER_3]);
@@ -1271,6 +1285,8 @@ enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st)
 	}
 	return LED_ERR_SUCCESS;
 }
+
+
 /*** LEDS FUNCTION DEF END ***/
 
 /* USER CODE END 4 */
