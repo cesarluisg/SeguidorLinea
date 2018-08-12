@@ -256,7 +256,7 @@ int main(void)
   /* PID Sensor set default value */
   pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.6, 0.02, 0.01, 0, 0);
 
-  uint16_t SensorValorActual;
+  int16_t SensorValorActual;
 
   /* Set motor defualt value */
   motorSetPotencia(MOTOR_DER_ID, 1);
@@ -917,9 +917,9 @@ enumMotorError motorInit (void)
  */
 enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
 {
-	char mensaje[100];
-	sprintf(mensaje, "Setear ID %d, Potencia %d \n\r", motor_ID, potencia);
-	debugPrint(mensaje);
+	//char mensaje[100];
+	//sprintf(mensaje, "Setear ID %d, Potencia %d \n\r", motor_ID, potencia);
+	//debugPrint(mensaje);
 
 	//Verifico ID del motor
 	if(motor_ID != MOTOR_IZQ_ID && motor_ID != MOTOR_DER_ID)
@@ -939,8 +939,8 @@ enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
 	{
 		if(motor_ID == MOTOR_DER_ID)
 		{
-			sprintf(mensaje, "Estoy setenado Potencia \n");
-			debugPrint(mensaje);
+			//sprintf(mensaje, "Estoy setenado Potencia \n");
+			//debugPrint(mensaje);
 
 			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
 		}
@@ -1060,6 +1060,7 @@ enum enumSensoresError sensoresReadyToRace(void)
  */
 int16_t sensoresGetValActual(void)
 {
+	char mensaje[200];
 	uint8_t i;
 	int16_t valActual = 0;
 	uint16_t maximo = 0, minimo = 0, promedio = 0;
@@ -1098,7 +1099,7 @@ int16_t sensoresGetValActual(void)
 	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_RESET);
 
 	//Cálculo máximo y mínimo y promedio
-	char mensaje[200];
+
 	//sprintf(mensaje, "Sensores fin conversion\n\r");
 	//debugPrint(mensaje);
 
@@ -1107,8 +1108,8 @@ int16_t sensoresGetValActual(void)
 
 	for (i = SENS_IZQ_3; i <= SENS_DER_3; i++ )
 	{
-		sprintf(mensaje, "%04d ", SensoresData.ADC_raw[i]);
-		debugPrint(mensaje);
+		//sprintf(mensaje, "%04d ", SensoresData.ADC_raw[i]);
+		//debugPrint(mensaje);
 
 		if (SensoresData.ADC_raw[i] < minimo)
 		{
@@ -1246,10 +1247,10 @@ int16_t sensoresGetValActual(void)
 //	debugPrint(mensaje);
 
 	//Escalado de valor actual
-	valActual = valActual * MAX_SENSOR_VALUE / abs(SensoresData.posicion_x[SENS_DER_3]);
+	valActual = valActual * MAX_SENSOR_VALUE / abs(SensoresData.posicion_x[SENS_V_DER_5]);
 
-	sprintf(mensaje, "Val actual: %05d", valActual);
-	debugPrint(mensaje);
+	//sprintf(mensaje, "%05d \r\n", valActual);
+	//debugPrint(mensaje);
 
 	return valActual;
 }
