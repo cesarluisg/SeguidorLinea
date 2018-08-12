@@ -1090,6 +1090,7 @@ int16_t sensoresGetValActual(void)
 
 	minimo = maximo = SensoresData.ADC_raw[SENS_IZQ_3];
 	sumavalores = 0;
+
 	for (i = SENS_IZQ_3; i <= SENS_DER_3; i++ )
 	{
 		sprintf(mensaje, "%04d ", SensoresData.ADC_raw[i]);
@@ -1105,18 +1106,44 @@ int16_t sensoresGetValActual(void)
 		}
 		sumavalores = sumavalores + SensoresData.ADC_raw[i];
 	}
-	promedio = sumavalores / (i - SENS_IZQ_3);
+	//promedio = sumavalores / (i - SENS_IZQ_3);
 
-	//sprintf(mensaje, "\r");
+	//sprintf(mensaje, "min=%d ", minimo);
 	//debugPrint(mensaje);
+
 	//LOGICA AGREGADA PARA MEJORAR PERFORMANCE
 	//Se agregan 4 sensores virtuales más, simulando los que no están a la izquierda y a la derecha,
 	//quedarán indicando el máximo valor, tanto a izquierda como a derecha, si pierden la línea
 	//Sólo se encenderán si la línea no está en posiciones centrales (SENSORES_POS_LINEA_CENTRO).
-	SensoresData.ADC_raw[SENS_V_IZQ_5] = 0;//(SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_IZQ_3] + minimo):minimo;
-	SensoresData.ADC_raw[SENS_V_IZQ_4] = 0;//(SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_IZQ_2] + minimo):minimo;
-	SensoresData.ADC_raw[SENS_V_DER_4] = 0;//(SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_DER_2] + minimo):minimo;
-	SensoresData.ADC_raw[SENS_V_DER_5] = 0;//(SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_DER_3] + minimo):minimo;
+	//Sensor Virtual IZQ 5
+	if(SensoresData.maximo_historico >= SensoresData.ADC_raw[SENS_IZQ_3])
+		SensoresData.ADC_raw[SENS_V_IZQ_5] = (SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_IZQ_3] + minimo):minimo;
+	else
+		SensoresData.ADC_raw[SENS_V_IZQ_5] = (SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?(-SensoresData.maximo_historico + SensoresData.ADC_raw[SENS_IZQ_3] + minimo):minimo;
+	sumavalores = sumavalores + SensoresData.ADC_raw[SENS_V_IZQ_5];
+	//Sensor Virtual IZQ 4
+	if(SensoresData.maximo_historico >= SensoresData.ADC_raw[SENS_IZQ_2])
+		SensoresData.ADC_raw[SENS_V_IZQ_4] = (SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_IZQ_2] + minimo):minimo;
+	else
+		SensoresData.ADC_raw[SENS_V_IZQ_4] = (SensoresData.pos_linea == SENSORES_POS_LINEA_IZQ)?(-SensoresData.maximo_historico + SensoresData.ADC_raw[SENS_IZQ_2] + minimo):minimo;
+	sumavalores = sumavalores + SensoresData.ADC_raw[SENS_V_IZQ_4];
+
+	//Sensor Virtual DER 4
+	if(SensoresData.maximo_historico >= SensoresData.ADC_raw[SENS_DER_2])
+		SensoresData.ADC_raw[SENS_V_DER_4] = (SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_DER_2] + minimo):minimo;
+	else
+		SensoresData.ADC_raw[SENS_V_DER_4] = (SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(-SensoresData.maximo_historico + SensoresData.ADC_raw[SENS_DER_2] + minimo):minimo;
+	sumavalores = sumavalores + SensoresData.ADC_raw[SENS_V_DER_4];
+
+	//Sensor Virtual DER 5
+	if(SensoresData.maximo_historico >= SensoresData.ADC_raw[SENS_DER_3])
+		SensoresData.ADC_raw[SENS_V_DER_5] = (SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_DER_3] + minimo):minimo;
+	else
+		SensoresData.ADC_raw[SENS_V_DER_5] = (SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(-SensoresData.maximo_historico + SensoresData.ADC_raw[SENS_DER_3] + minimo):minimo;
+	sumavalores = sumavalores + SensoresData.ADC_raw[SENS_V_DER_5];
+
+	//Cálculo de promedio
+	promedio = sumavalores / (SENS_V_DER_5 -1 -SENS_V_IZQ_5);
 
 	//sprintf(mensaje, "\r");
 	//debugPrint(mensaje);
@@ -1127,7 +1154,8 @@ int16_t sensoresGetValActual(void)
 	//1ro Calculo suma de productos de cada valor del sensor por la distancia al centro de los sensores
 	sumaproductovalores = 0;
 	sumavalores = 0;
-	for(uint8_t i = SENS_IZQ_3; i <= SENS_DER_3; i++)
+	//for(uint8_t i = SENS_IZQ_3; i <= SENS_DER_3; i++)
+	for(uint8_t i = SENS_V_IZQ_5; i <= SENS_V_DER_5; i++)
 	{
 		SensoresData.ADC_fil[i] = (SensoresData.ADC_raw[i] > promedio)? SensoresData.ADC_raw[i] - promedio : 0;
 		sumaproductovalores += SensoresData.ADC_fil[i] * SensoresData.posicion_x[i];
@@ -1184,10 +1212,11 @@ int16_t sensoresGetValActual(void)
 	}
 
 
-	sprintf(mensaje, "%05d %05d %05d %012ld %012ld %04d %04d %04d %04d %04d %04d %04d %04d %04d %04d %c\r\n", 	valActual,
+	sprintf(mensaje, "%05d %05d %05d %012ld %012ld %04d %04d %04d %04d %04d %04d %04d %04d %04d %04d %c\r\n",
+												valActual,
 												maximo,
 												minimo,
-												sumaproductovalores,
+												SensoresData.maximo_historico,
 												sumavalores,
 												SensoresData.ADC_fil[SENS_V_IZQ_5],
 												SensoresData.ADC_fil[SENS_V_IZQ_4],
