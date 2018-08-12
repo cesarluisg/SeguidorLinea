@@ -113,6 +113,20 @@ struct sensores_struct {
 } SensoresData;
 /*** SENSORES END PV ***/
 
+
+/*** LEDS BEGIN PV ***/
+typedef enum enumLedsID {LED_NOVALID_ID, LED_1_ID, LED_2_ID} enumLedsID;
+typedef enum enumLedsStates {LED_ST_OFF, LED_ST_ON} enumLedsStates;
+typedef enum enumLedsError {LED_ERR_SUCCESS, LED_ERR_ST_NO_VALID} enumLedsError;
+
+struct leds_struct
+{
+	GPIO_TypeDef * Port[LED_2_ID];		//Puerto del LED1
+	uint16_t Pin[LED_2_ID];				//Pin
+} LedsData;
+
+/*** LEDS END PV ***/
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -136,6 +150,8 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void calcVel(int velMax, int velMin, double newCorrection);
 int increasePower(int currPowMax);
 
+void debugPrint(char _out[]);
+
 /*** SENSORES AND MOTORES BEGIN PFP ***/
 
 enumMotorError motorInit (void); //Inicializa estructura de motores
@@ -147,6 +163,12 @@ enumSensoresError sensoresReadyToRace(void); //Reinicia el módulo para iniciar u
 int16_t sensoresGetValActual(void); //Retorna posición de la línea relativa al centro del robot (valores entre -100 y 100)
 
 /*** SENSORES AND MOTORES END PFP***/
+
+/*** LEDS BEGIN PFP ***/
+enumLedsError ledsInit(void); //Inicializar Leds
+enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st);
+
+/*** LEDS END PFP ***/
 
 /* USER CODE END PFP */
 
@@ -183,9 +205,7 @@ int main(void)
 	int powMax = RACE_POWER_SET_VALUE;
 	int powMin = MIN_POWER_VALUE;
 
-	/*** SENSORES AND MOTORS USER CODE BEGIN 1 ***/
-	motorInit();
-	sensoresInit();
+
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -213,16 +233,16 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_USART1_UART_Init();
   MX_RTC_Init();
+
   /* USER CODE BEGIN 2 */
 
   //int readSpeed = 0;
 
-  /* TODO Cesar */
-  //MotorIzq.setMotorNumber(MOTOR_IZQUIERDO);
-  //MotorDer.setMotorNumber(MOTOR_DERECHO);
-
-  /* TODO Cesar */
-  //mySensores.init();
+  /*** SENSORES AND MOTORS USER CODE BEGIN 1 ***/
+  motorInit();
+  sensoresInit();
+  ledsInit();
+  /*** SENSORES AND MOTORS USER CODE END 1 ***/
 
   _driverMode = RACE_MODE;
   /* PID init */
@@ -254,11 +274,32 @@ int main(void)
   pidSet( pidRuedaDer, 0, 100, 20, 5, 5, 5, 0, 0);
 #endif
 
+  //TEST Potencia de motor
+  motorSetPotencia(MOTOR_DER_ID, 1);
+  motorSetPotencia(MOTOR_IZQ_ID, 1);
+  debugPrint("Seguidor de Linea \n");
+  //ledsSet(LED_1_ID, LED_ST_OFF);
+  //ledsSet(LED_2_ID, LED_ST_OFF);
   /* USER CODE END 2 */
-
+  int16_t valorActualTest;
+  char mensaje[100];
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-		/* Check Mode */
+  while (1)
+  {
+
+	  //ledsSet(LED_1_ID, LED_ST_OFF);
+	  //ledsSet(LED_2_ID, LED_ST_OFF);
+	  //HAL_Delay(500);
+	  //ledsSet(LED_1_ID, LED_ST_ON);
+	  //ledsSet(LED_2_ID, LED_ST_ON);
+
+	  valorActualTest = sensoresGetValActual();
+	  sprintf(mensaje, "%06d \r", valorActualTest);
+	  debugPrint(mensaje);
+
+	  HAL_Delay(250);
+	  /* Check Mode */
 		switch (_driverMode) {
 			case ERROR_MODE:
 				/* Error mode, display error */
@@ -329,6 +370,7 @@ int main(void)
 			}
 		}
 
+  }
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
@@ -851,8 +893,12 @@ enumMotorError motorInit (void)
  */
 enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
 {
+	char mensaje[100];
+	sprintf(mensaje, "Setear ID %d, Potencia %d \n\r", motor_ID, potencia);
+	debugPrint(mensaje);
+
 	//Verifico ID del motor
-	if(motor_ID != MOTOR_IZQ_ID || motor_ID != MOTOR_DER_ID)
+	if(motor_ID != MOTOR_IZQ_ID && motor_ID != MOTOR_DER_ID)
 	{
 		return MOTOR_ERR_ID_INVALID;
 	}
@@ -869,10 +915,14 @@ enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
 	{
 		if(motor_ID == MOTOR_DER_ID)
 		{
+			sprintf(mensaje, "Estoy setenado Potencia \n");
+			debugPrint(mensaje);
+
 			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
 		}
 		else
 		{
+
 			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
 		}
 	}
@@ -1023,8 +1073,15 @@ int16_t sensoresGetValActual(void)
 	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_RESET);
 
 	//Cálculo máximo y mínimo
+	//char mensaje[100];
+	//sprintf(mensaje, "Sensores fin conversion\n\r");
+	//debugPrint(mensaje);
+
 	for (uint8_t i = SENS_IZQ_3; i <= SENS_DER_3; i++ )
 	{
+		//sprintf(mensaje, "%04d ", SensoresData.ADC_raw[i]);
+		//debugPrint(mensaje);
+
 		if (SensoresData.ADC_raw[i] < minimo)
 		{
 			minimo = SensoresData.ADC_raw[i];
@@ -1034,7 +1091,8 @@ int16_t sensoresGetValActual(void)
 			maximo = SensoresData.ADC_raw[i];
 		}
 	}
-
+	//sprintf(mensaje, "\r");
+	//debugPrint(mensaje);
 
 	//Cálculo de Valor actual
 	//Se calcula como un centro de gravedad de la señal de cada sensor
@@ -1102,12 +1160,43 @@ int16_t sensoresGetValActual(void)
 	SensoresData.ADC_raw[SENS_V_DER_5] = (SensoresData.pos_linea == SENSORES_POS_LINEA_DER)?(SensoresData.maximo_historico - SensoresData.ADC_raw[SENS_DER_3] + minimo):0;
 
 	//Escalado del valor actual para devolver a función llamadora
-	valActual = (int16_t)centro * MAX_SENSOR_VALUE / 250;
+	valActual = (int16_t)centro; //* MAX_SENSOR_VALUE / 250;
 
 	return valActual;
 }
 
 /*** SENSORES FUNCTION DEF END ***/
+
+/*** LEDS FUNCTION DEF BEGIN ***/
+enumLedsError ledsInit(void)
+{
+	LedsData.Port[LED_1_ID] = LED_1_GPIO_Port;
+	LedsData.Pin[LED_1_ID] = LED_1_Pin;
+	LedsData.Port[LED_2_ID] = LED_2_GPIO_Port;
+	LedsData.Pin[LED_2_ID] = LED_2_Pin;
+	return LED_ERR_SUCCESS;
+}
+
+enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st)
+{
+	if(led_ID > LED_NOVALID_ID && led_ID <= LED_2_ID)
+	{
+		if(led_st == LED_ST_ON)
+		{
+			HAL_GPIO_WritePin(LedsData.Port[led_ID], LedsData.Pin[led_ID], GPIO_PIN_RESET);
+		}
+		else if (led_st == LED_ST_OFF)
+		{
+			HAL_GPIO_WritePin(LedsData.Port[led_ID], LedsData.Pin[led_ID], GPIO_PIN_SET);
+		}
+		else
+		{
+			return LED_ERR_ST_NO_VALID;
+		}
+	}
+	return LED_ERR_SUCCESS;
+}
+/*** LEDS FUNCTION DEF END ***/
 
 /* USER CODE END 4 */
 
