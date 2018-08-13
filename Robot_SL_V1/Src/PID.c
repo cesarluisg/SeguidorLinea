@@ -94,9 +94,9 @@ extern double pidCalculate( PID_s *pid, double setpoint, double pv )
 
 	// Restrict to max/min
 	if (output > pid->max)
-	output = pid->max;
+		output = pid->max;
 	else if (output < pid->min)
-	output = pid->min;
+		output = pid->min;
 
 	// Save error to previous error
 	pid->pre_error = error;
