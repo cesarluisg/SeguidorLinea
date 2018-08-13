@@ -695,7 +695,7 @@ static void MX_TIM2_Init(void)
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -924,7 +924,7 @@ enumMotorError motorInit (void)
 {
 
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
 
 	MotoresData.frenoPinPort[MOTOR_DER_ID] = Freno_DER_GPIO_Port;
 	MotoresData.frenoPin[MOTOR_DER_ID] = Freno_DER_Pin;
@@ -971,7 +971,7 @@ enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
 		else
 		{
 
-			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
+			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
 		}
 	}
 	else
@@ -1007,7 +1007,7 @@ enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st)
 		}
 		else
 		{
-			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
 		}
 
 		//Efectuar frenado
