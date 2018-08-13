@@ -266,6 +266,8 @@ int main(void)
 
   int16_t SensorValorActual;
 
+  int botonPresionado = false;
+
   /* Set motor defualt value */
   motorSetPotencia(MOTOR_DER_ID, 1);
   motorSetPotencia(MOTOR_IZQ_ID, 1);
@@ -274,10 +276,6 @@ int main(void)
   //char mensaje[200];
   //uint16_t valorActualTest;
 
-
-  //ledsSet(LED_DER_ID, LED_ST_OFF);
-  //ledsSet(LED_IZQ_ID, LED_ST_OFF);
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -285,29 +283,7 @@ int main(void)
   while (1)
   {
 
-	  //ledsSet(LED_DER_ID, LED_ST_OFF);
-	  //ledsSet(LED_IZQ_ID, LED_ST_OFF);
-	  //HAL_Delay(500);
-	  //ledsSet(LED_DER_ID, LED_ST_ON);
-	  //ledsSet(LED_IZQ_ID, LED_ST_ON);
-	  if(botonesGetEstado(BOTON_IZQ_ID) == BOTON_ST_PRESIONADO)
-	  {
-		  ledsSet(LED_IZQ_ID, LED_ST_ON);
-	  }
-
-	  if(botonesGetEstado(BOTON_DER_ID) == BOTON_ST_PRESIONADO)
-	  {
-		  ledsSet(LED_DER_ID, LED_ST_ON);
-	  }
-
-	  if(botonesGetEstado(BOTON_CENTRAL_ID) == BOTON_ST_PRESIONADO)
-	  {
-		  ledsSet(LED_DER_ID, LED_ST_OFF);
-		  ledsSet(LED_IZQ_ID, LED_ST_OFF);
-	  }
-
-
-	  sensoresGetValActual();
+	  //sensoresGetValActual();
 	  //sprintf(mensaje, "%06d \r", valorActualTest);
 	  //debugPrint(mensaje);
 	  //HAL_Delay(250);
@@ -318,7 +294,11 @@ int main(void)
 		switch (_driverMode) {
 			case ERROR_MODE:
 				/* Error mode, display error */
+				botonPresionado = false;
+
 				//setLed();
+				ledsSet(LED_DER_ID, LED_ST_OFF);
+				ledsSet(LED_IZQ_ID, LED_ST_OFF);
 
 				/* Set motor defualt value */
 				motorSetPotencia(MOTOR_DER_ID, 1);
@@ -329,7 +309,12 @@ int main(void)
 
 			case CALIBRATE_SENSOR_MODE:
 				/* Calibrate Sensor Mode */
+
+				botonPresionado = false;
+
 				//setLed();
+				ledsSet(LED_DER_ID, LED_ST_OFF);
+				ledsSet(LED_IZQ_ID, LED_ST_OFF);
 
 				/*Por ahora no tenemos esta funcionalidad, pero no se queda frenadoe en este punto y vuelve a PRE_RACE_MODE */
 
@@ -345,38 +330,53 @@ int main(void)
 
 				/* Led status Race Mode */
 				//setLed();
-
 				ledsSet(LED_DER_ID, LED_ST_ON);
 				ledsSet(LED_IZQ_ID, LED_ST_OFF);
 
-
 				/* Wait for Button To change Max Power to Motor */
-				if(false) /*  */
+				if(botonesGetEstado(BOTON_IZQ_ID) == BOTON_ST_PRESIONADO)
 				{
 					/* take new power value */
 					powMax = changeMaxPower(powMax);
 
 					/* Led Power Value */
-					//setLedBLink(powMax/ledFrequency);
+					//ledsSet(LED_DER_ID, LED_ST_ON);
+					ledsSet(LED_IZQ_ID, LED_ST_ON);
 				}
 
 				/* Wait for Button ON to RUN */
-				if(true) /* Is button change mode on? */
+				if((botonesGetEstado(BOTON_CENTRAL_ID) == BOTON_ST_PRESIONADO) || botonPresionado) /* Is button change mode on? */
 				{
-					//Example pidSet (pidSensores, 0.1, 100, -100, 0.6, 0.02, 0.1, 0, 0);
+					botonPresionado = true;
+
+					//Example pidSet (pidSensores, 0.1, 100, -100, 0.7, 0.02, 0.1, 0, 0);
 
 					/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
-					pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.6, 0.02, 0.01, 0, 0);
+					pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.01, 0, 0);
 
 					/* default Value */
 					correction = 0;
 
-					/* Set motor Race max value */
-					motorSetPotencia(MOTOR_DER_ID, MAX_POWER_VALUE);
-					motorSetPotencia(MOTOR_IZQ_ID, MAX_POWER_VALUE);
+					/* Set led */
+					ledsSet(LED_DER_ID, LED_ST_OFF);
+					ledsSet(LED_IZQ_ID, LED_ST_ON);
 
-					/* Go to Race */
-					_driverMode = RACE_MODE;
+					if(botonesGetEstado(BOTON_CENTRAL_ID) == BOTON_ST_NO_PRESIONADO) /* Is button change mode on? */
+					{
+						/* boton fue soltado */
+						botonPresionado = false;
+
+						/* Set motor Race max value */
+						motorSetPotencia(MOTOR_DER_ID, MAX_POWER_VALUE);
+						motorSetPotencia(MOTOR_IZQ_ID, MAX_POWER_VALUE);
+
+						/* Set led */
+						ledsSet(LED_DER_ID, LED_ST_ON);
+						ledsSet(LED_IZQ_ID, LED_ST_ON);
+
+						/* Go to Race */
+						_driverMode = RACE_MODE;
+					}
 				}
 				break;
 
@@ -401,13 +401,16 @@ int main(void)
 		};
 
 		/* Change Mode Button */
-		if(false) /* Is button change mode on? */
+		if(botonesGetEstado(BOTON_DER_ID) == BOTON_ST_PRESIONADO)/* Is button change mode on? */
 		{
-			_driverMode++;
-			if (LAST_MODE <= _driverMode)
-			{
-				_driverMode = CALIBRATE_SENSOR_MODE;
-			}
+			/* Por ahora solo vuelve a estado preRace, debido a que no est'an desarrollados los otros modos */
+			//_driverMode++;
+			//if (LAST_MODE <= _driverMode)
+			//{
+			//	_driverMode = CALIBRATE_SENSOR_MODE;
+			//}
+			botonPresionado = false;
+			_driverMode = PRE_RACE_MODE;
 		}
 
   }
@@ -1337,7 +1340,6 @@ enumBotonesStates botonesGetEstado(enumBotonesID boton_ID)
 		{
 			return (HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET)? BOTON_ST_NO_PRESIONADO: BOTON_ST_PRESIONADO;
 		}
-
 	}
 	else
 	{
