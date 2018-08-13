@@ -4,57 +4,46 @@
   * @file           : main.c
   * @brief          : Main program body
   ******************************************************************************
-  * This notice applies to any and all portions of this file
+  ** This notice applies to any and all portions of this file
   * that are not between comment pairs USER CODE BEGIN and
   * USER CODE END. Other portions of this file, whether 
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * Copyright (c) 2018 STMicroelectronics International N.V. 
-  * All rights reserved.
+  * COPYRIGHT(c) 2018 STMicroelectronics
   *
-  * Redistribution and use in source and binary forms, with or without 
-  * modification, are permitted, provided that the following conditions are met:
+  * Redistribution and use in source and binary forms, with or without modification,
+  * are permitted provided that the following conditions are met:
+  *   1. Redistributions of source code must retain the above copyright notice,
+  *      this list of conditions and the following disclaimer.
+  *   2. Redistributions in binary form must reproduce the above copyright notice,
+  *      this list of conditions and the following disclaimer in the documentation
+  *      and/or other materials provided with the distribution.
+  *   3. Neither the name of STMicroelectronics nor the names of its contributors
+  *      may be used to endorse or promote products derived from this software
+  *      without specific prior written permission.
   *
-  * 1. Redistribution of source code must retain the above copyright notice, 
-  *    this list of conditions and the following disclaimer.
-  * 2. Redistributions in binary form must reproduce the above copyright notice,
-  *    this list of conditions and the following disclaimer in the documentation
-  *    and/or other materials provided with the distribution.
-  * 3. Neither the name of STMicroelectronics nor the names of other 
-  *    contributors to this software may be used to endorse or promote products 
-  *    derived from this software without specific written permission.
-  * 4. This software, including modifications and/or derivative works of this 
-  *    software, must execute solely and exclusively on microcontroller or
-  *    microprocessor devices manufactured by or for STMicroelectronics.
-  * 5. Redistribution and use of this software other than as permitted under 
-  *    this license is void and will automatically terminate your rights under 
-  *    this license. 
-  *
-  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
-  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
-  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
-  * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
-  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
-  * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-  * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
-  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
-  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   *
   ******************************************************************************
   */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_hal.h"
-#include "usb_device.h"
 
 /* USER CODE BEGIN Includes */
 #include "PID.h"
-
-
+#include "stdlib.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -116,17 +105,30 @@ struct sensores_struct {
 
 
 /*** LEDS BEGIN PV ***/
-typedef enum enumLedsID {LED_NOVALID_ID, LED_1_ID, LED_2_ID} enumLedsID;
+typedef enum enumLedsID {LED_NOVALID_ID, LED_DER_ID, LED_IZQ_ID, LED_PLAQUITA_ID, LED_COUNT_ID} enumLedsID;
 typedef enum enumLedsStates {LED_ST_OFF, LED_ST_ON} enumLedsStates;
 typedef enum enumLedsError {LED_ERR_SUCCESS, LED_ERR_ST_NO_VALID} enumLedsError;
 
 struct leds_struct
 {
-	GPIO_TypeDef * Port[LED_2_ID];		//Puerto del LED1
-	uint16_t Pin[LED_2_ID];				//Pin
+	GPIO_TypeDef * Port[LED_COUNT_ID];		//Puerto del LED1
+	uint16_t Pin[LED_COUNT_ID];				//Pin
+	uint8_t Estado[LED_COUNT_ID];			//Último estado registrado
 } LedsData;
 
 /*** LEDS END PV ***/
+
+/*** BOTONES BEGIN PV ***/
+typedef enum enumBotonesID {BOTONES_NOVALID_ID, BOTON_IZQ_ID, BOTON_DER_ID, BOTON_CENTRAL_ID, BOTON_COUNT_ID} enumBotonesID;
+typedef enum enumBotonesStates {BOTON_ST_PRESIONADO, BOTON_ST_NO_PRESIONADO, BOTONES_ST_ERROR_ID} enumBotonesStates;
+typedef enum enumBotonesError {BOTONES_ERR_SUCCESS, BOTONES_ERR_ID_NO_VALID} enumBotonesError;
+struct botones_struct
+{
+	GPIO_TypeDef * Port[BOTON_COUNT_ID];
+	uint16_t Pin[BOTON_COUNT_ID];
+	uint8_t Estado[BOTON_COUNT_ID];
+} BotonesData;
+/*** BOTONES END PV ***/
 
 /* USER CODE END PV */
 
@@ -170,6 +172,12 @@ enumLedsError ledsInit(void); //Inicializar Leds
 enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st);
 
 /*** LEDS END PFP ***/
+
+/*** BOTONES BEGIN PFP ***/
+enumBotonesError botonesInit(void); //Inicializar Leds
+enumBotonesStates botonesGetEstado(enumBotonesID boton_ID);
+
+/*** BOTONES END PFP ***/
 
 /* USER CODE END PFP */
 
@@ -230,7 +238,6 @@ int main(void)
   MX_ADC2_Init();
   MX_TIM4_Init();
   MX_TIM3_Init();
-  MX_USB_DEVICE_Init();
   MX_USART1_UART_Init();
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
@@ -241,6 +248,7 @@ int main(void)
   motorInit();
   sensoresInit();
   ledsInit();
+  botonesInit();
   /*** SENSORES AND MOTORS USER CODE END 1 ***/
 
   /* Driver Modde default value */
@@ -254,9 +262,9 @@ int main(void)
   if (true != pidGetPID(&pidSensores))
   	return -1;
   /* PID Sensor set default value */
-  pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.6, 0.02, 0.01, 0, 0);
+  pidSet( pidSensores, 0.01, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.01, 0, 0);
 
-  uint16_t SensorValorActual;
+  int16_t SensorValorActual;
 
   /* Set motor defualt value */
   motorSetPotencia(MOTOR_DER_ID, 1);
@@ -267,8 +275,8 @@ int main(void)
   //uint16_t valorActualTest;
 
 
-  //ledsSet(LED_1_ID, LED_ST_OFF);
-  //ledsSet(LED_2_ID, LED_ST_OFF);
+  //ledsSet(LED_DER_ID, LED_ST_OFF);
+  //ledsSet(LED_IZQ_ID, LED_ST_OFF);
 
   /* USER CODE END 2 */
 
@@ -277,16 +285,34 @@ int main(void)
   while (1)
   {
 
-	  //ledsSet(LED_1_ID, LED_ST_OFF);
-	  //ledsSet(LED_2_ID, LED_ST_OFF);
+	  //ledsSet(LED_DER_ID, LED_ST_OFF);
+	  //ledsSet(LED_IZQ_ID, LED_ST_OFF);
 	  //HAL_Delay(500);
-	  //ledsSet(LED_1_ID, LED_ST_ON);
-	  //ledsSet(LED_2_ID, LED_ST_ON);
+	  //ledsSet(LED_DER_ID, LED_ST_ON);
+	  //ledsSet(LED_IZQ_ID, LED_ST_ON);
+	  if(botonesGetEstado(BOTON_IZQ_ID) == BOTON_ST_PRESIONADO)
+	  {
+		  ledsSet(LED_IZQ_ID, LED_ST_ON);
+	  }
 
-	  //valorActualTest = sensoresGetValActual();
+	  if(botonesGetEstado(BOTON_DER_ID) == BOTON_ST_PRESIONADO)
+	  {
+		  ledsSet(LED_DER_ID, LED_ST_ON);
+	  }
+
+	  if(botonesGetEstado(BOTON_CENTRAL_ID) == BOTON_ST_PRESIONADO)
+	  {
+		  ledsSet(LED_DER_ID, LED_ST_OFF);
+		  ledsSet(LED_IZQ_ID, LED_ST_OFF);
+	  }
+
+
+	  sensoresGetValActual();
 	  //sprintf(mensaje, "%06d \r", valorActualTest);
 	  //debugPrint(mensaje);
 	  //HAL_Delay(250);
+
+	  //continue;
 
 	  /* Check Mode */
 		switch (_driverMode) {
@@ -320,8 +346,8 @@ int main(void)
 				/* Led status Race Mode */
 				//setLed();
 
-				ledsSet(LED_1_ID, LED_ST_ON);
-				ledsSet(LED_2_ID, LED_ST_OFF);
+				ledsSet(LED_DER_ID, LED_ST_ON);
+				ledsSet(LED_IZQ_ID, LED_ST_OFF);
 
 
 				/* Wait for Button To change Max Power to Motor */
@@ -432,11 +458,9 @@ void SystemClock_Config(void)
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_ADC
-                              |RCC_PERIPHCLK_USB;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_ADC;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV4;
-  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -671,7 +695,7 @@ static void MX_TIM2_Init(void)
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -900,7 +924,7 @@ enumMotorError motorInit (void)
 {
 
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
 
 	MotoresData.frenoPinPort[MOTOR_DER_ID] = Freno_DER_GPIO_Port;
 	MotoresData.frenoPin[MOTOR_DER_ID] = Freno_DER_Pin;
@@ -917,9 +941,9 @@ enumMotorError motorInit (void)
  */
 enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
 {
-	char mensaje[100];
-	sprintf(mensaje, "Setear ID %d, Potencia %d \n\r", motor_ID, potencia);
-	debugPrint(mensaje);
+	//char mensaje[100];
+	//sprintf(mensaje, "Setear ID %d, Potencia %d \n\r", motor_ID, potencia);
+	//debugPrint(mensaje);
 
 	//Verifico ID del motor
 	if(motor_ID != MOTOR_IZQ_ID && motor_ID != MOTOR_DER_ID)
@@ -939,15 +963,15 @@ enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
 	{
 		if(motor_ID == MOTOR_DER_ID)
 		{
-			sprintf(mensaje, "Estoy setenado Potencia \n");
-			debugPrint(mensaje);
+			//sprintf(mensaje, "Estoy setenado Potencia \n");
+			//debugPrint(mensaje);
 
 			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
 		}
 		else
 		{
 
-			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
+			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
 		}
 	}
 	else
@@ -983,7 +1007,7 @@ enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st)
 		}
 		else
 		{
-			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 0);
+			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
 		}
 
 		//Efectuar frenado
@@ -1060,14 +1084,13 @@ enum enumSensoresError sensoresReadyToRace(void)
  */
 int16_t sensoresGetValActual(void)
 {
+	//char mensaje[200];
 	uint8_t i;
 	int16_t valActual = 0;
 	uint16_t maximo = 0, minimo = 0, promedio = 0;
 	long int sumaproductovalores = 0, sumavalores = 0, centro = 0;
 
 	//Inicio de toma de valores de los ADC
-
-	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_SET);
 
 	HAL_ADC_Start(&hadc1);
 
@@ -1095,10 +1118,8 @@ int16_t sensoresGetValActual(void)
 
 	HAL_ADC_Stop(&hadc2);
 
-	HAL_GPIO_WritePin(LED_PCB_GPIO_Port, LED_PCB_Pin, GPIO_PIN_RESET);
-
 	//Cálculo máximo y mínimo y promedio
-	char mensaje[200];
+
 	//sprintf(mensaje, "Sensores fin conversion\n\r");
 	//debugPrint(mensaje);
 
@@ -1107,8 +1128,8 @@ int16_t sensoresGetValActual(void)
 
 	for (i = SENS_IZQ_3; i <= SENS_DER_3; i++ )
 	{
-		sprintf(mensaje, "%04d ", SensoresData.ADC_raw[i]);
-		debugPrint(mensaje);
+		//sprintf(mensaje, "%04d ", SensoresData.ADC_raw[i]);
+		//debugPrint(mensaje);
 
 		if (SensoresData.ADC_raw[i] < minimo)
 		{
@@ -1246,10 +1267,10 @@ int16_t sensoresGetValActual(void)
 //	debugPrint(mensaje);
 
 	//Escalado de valor actual
-	valActual = valActual * MAX_SENSOR_VALUE / abs(SensoresData.posicion_x[SENS_DER_3]);
+	valActual = valActual * MAX_SENSOR_VALUE / abs(SensoresData.posicion_x[SENS_V_DER_5]);
 
-	sprintf(mensaje, "Val actual: %05d", valActual);
-	debugPrint(mensaje);
+	//sprintf(mensaje, "%05d \r\n", valActual);
+	//debugPrint(mensaje);
 
 	return valActual;
 }
@@ -1259,16 +1280,18 @@ int16_t sensoresGetValActual(void)
 /*** LEDS FUNCTION DEF BEGIN ***/
 enumLedsError ledsInit(void)
 {
-	LedsData.Port[LED_1_ID] = LED_1_GPIO_Port;
-	LedsData.Pin[LED_1_ID] = LED_1_Pin;
-	LedsData.Port[LED_2_ID] = LED_2_GPIO_Port;
-	LedsData.Pin[LED_2_ID] = LED_2_Pin;
+	LedsData.Port[LED_DER_ID] = LED_2_GPIO_Port;
+	LedsData.Pin[LED_DER_ID] = LED_2_Pin;
+	LedsData.Port[LED_IZQ_ID] = LED_1_GPIO_Port;
+	LedsData.Pin[LED_IZQ_ID] = LED_1_Pin;
+	LedsData.Port[LED_PLAQUITA_ID] = LED_PCB_GPIO_Port;
+	LedsData.Pin[LED_PLAQUITA_ID] = LED_PCB_Pin;
 	return LED_ERR_SUCCESS;
 }
 
 enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st)
 {
-	if(led_ID > LED_NOVALID_ID && led_ID <= LED_2_ID)
+	if(led_ID > LED_NOVALID_ID && led_ID < LED_COUNT_ID)
 	{
 		if(led_st == LED_ST_ON)
 		{
@@ -1288,6 +1311,40 @@ enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st)
 
 
 /*** LEDS FUNCTION DEF END ***/
+
+/*** BOTONES FUNCTION DEF BEGIN ***/
+enumBotonesError botonesInit(void)
+{
+	BotonesData.Port[BOTON_IZQ_ID] = BOTON_1_IN_GPIO_Port;
+	BotonesData.Pin[BOTON_IZQ_ID] = BOTON_1_IN_Pin;
+	BotonesData.Port[BOTON_DER_ID] = BOTON_2_IN_GPIO_Port;
+	BotonesData.Pin[BOTON_DER_ID] = BOTON_2_IN_Pin;
+	BotonesData.Port[BOTON_CENTRAL_ID] = PUL_ARRANQUE_GPIO_Port;
+	BotonesData.Pin[BOTON_CENTRAL_ID] = PUL_ARRANQUE_Pin;
+
+	return BOTONES_ERR_SUCCESS;
+}
+
+enumBotonesStates botonesGetEstado(enumBotonesID boton_ID)
+{
+	if(boton_ID > BOTONES_NOVALID_ID && boton_ID < BOTON_COUNT_ID)
+	{
+		if(boton_ID == BOTON_CENTRAL_ID)
+		{
+			return (HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET)? BOTON_ST_PRESIONADO: BOTON_ST_NO_PRESIONADO;
+		}
+		else
+		{
+			return (HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET)? BOTON_ST_NO_PRESIONADO: BOTON_ST_PRESIONADO;
+		}
+
+	}
+	else
+	{
+		return BOTONES_ST_ERROR_ID;
+	}
+}
+/*** BOTONES FUNCTION DEF END ***/
 
 /* USER CODE END 4 */
 
