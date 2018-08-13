@@ -52,57 +52,56 @@ extern void pidSet( PID_s *pid, double dt, double max, double min, double Kp, do
 
 extern double pidCalculate( PID_s *pid, double setpoint, double pv )
 {
-    
-    // Calculate error
-    double error = setpoint - pv;
+	// Calculate error
+	double error = setpoint - pv;
 
-    // Proportional term
-    double Pout = pid->Kp * error;
+	// Proportional term
+	double Pout = pid->Kp * error;
 
-    // Derivative term
-    if (0.0 == pid->dt) {
-    	/* Y aca que hacemos? */
-    	return 0;
-    }
+	// Integral term
+	pid->integral += error * pid->dt;
+	double Iout = pid->Ki * pid->integral;
 
-    // Integral term
-    pid->integral += error * pid->dt;
-    double Iout = pid->Ki * pid->integral;
+	// Derivative term
+	double Dout = 0;
+	if (0.0 != pid->dt)
+	{
+		double derivative = (error - pid->pre_error) / pid->dt;
+		Dout = pid->Kd * derivative;
+	}
 
 #ifdef WINDUP_FILTER
 	if(setpoint > pv)
 	{
-		if(setpoint < (pv + Iout + Pout))
+		if(setpoint < (pv + Pout + Iout))
 		{
 			pid->integral = 0;
 		}
 	}
 	else if(setpoint < pv)
 	{
-		if(setpoint > (pv + Iout + Pout))
+		if(setpoint > (pv + Pout + Iout))
 		{
 			pid->integral = 0;
 		}
 	}
 #endif
 
-	double derivative = (error - pid->pre_error) / pid->dt;
-	double Dout = pid->Kd * derivative;
+	// Calculate total output
+	double output = Pout + Iout + Dout;
 
-    // Calculate total output PID
-    double output = Pout + Iout + Dout;
+	// Restrict to max/min
+	if (output > pid->max)
+	output = pid->max;
+	else if (output < pid->min)
+	output = pid->min;
 
-    // Restrict to max/min
-    if( output > pid->max )
-        output = pid->max;
-    else if( output < pid->min )
-        output = pid->min;
+	// Save error to previous error
+	pid->pre_error = error;
 
-    // Save error to previous error
-    pid->pre_error = error;
-
-    return output;
+	return output;
 }
+
 
 
 #endif
