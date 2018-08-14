@@ -150,7 +150,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN PFP */
 
-void calcVel(int velMax, int velMin, double newCorrection);
+void calcVel(int velRace, double newCorrection);
 int changeMaxPower(int currPowMax);
 
 void debugPrint(char _out[]);
@@ -210,9 +210,7 @@ int main(void)
 
 	double correction = 0;
 
-	int powMax = RACE_POWER_SET_VALUE;
-	int powMin = MIN_POWER_VALUE;
-
+	int powRace = RACE_POWER_SET_VALUE;
 
   /* USER CODE END 1 */
 
@@ -337,7 +335,7 @@ int main(void)
 				if(botonesGetEstado(BOTON_IZQ_ID) == BOTON_ST_PRESIONADO)
 				{
 					/* take new power value */
-					powMax = changeMaxPower(powMax);
+					powRace = changeMaxPower(powRace);
 
 					/* Led Power Value */
 					//ledsSet(LED_DER_ID, LED_ST_ON);
@@ -367,8 +365,8 @@ int main(void)
 						botonPresionado = false;
 
 						/* Set motor Race max value */
-						motorSetPotencia(MOTOR_DER_ID, MAX_POWER_VALUE);
-						motorSetPotencia(MOTOR_IZQ_ID, MAX_POWER_VALUE);
+						motorSetPotencia(MOTOR_DER_ID, powRace);
+						motorSetPotencia(MOTOR_IZQ_ID, powRace);
 
 						/* Set led */
 						ledsSet(LED_DER_ID, LED_ST_ON);
@@ -390,7 +388,7 @@ int main(void)
 				correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, (double) SensorValorActual);
 
 				/* Calculate velocity of a motors and set values */
-				calcVel(powMax, powMin, correction);
+				calcVel(powRace, correction);
 
 				break;
 
@@ -872,10 +870,10 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void calcVel(int powMax, int powMin, double newCorrection)
+void calcVel(int velRace, double newCorrection)
 {
-    int velMotorIzq = powMax;
-    int velMotorDer = powMax;
+    int velMotorIzq = velRace;
+    int velMotorDer = velRace;
 
     /* newCorrection es bueno que sea un double asi se puede multiplicar o dividir por un fraccional */
     newCorrection = newCorrection/10;
@@ -884,9 +882,9 @@ void calcVel(int powMax, int powMin, double newCorrection)
     {
         velMotorIzq = velMotorIzq - (int) newCorrection;
         velMotorDer = velMotorDer + (int) newCorrection;
-        if (velMotorIzq < powMin)
+        if (velMotorIzq < MIN_POWER_VALUE)
         {
-            velMotorIzq = powMin;
+            velMotorIzq = MIN_POWER_VALUE;
         }
         if (velMotorDer > MAX_POWER_VALUE)
         {
@@ -898,9 +896,9 @@ void calcVel(int powMax, int powMin, double newCorrection)
     {
         velMotorDer = velMotorDer + (int) newCorrection;
         velMotorIzq = velMotorIzq - (int) newCorrection;
-        if (velMotorDer < powMin)
+        if (velMotorDer < MIN_POWER_VALUE)
         {
-            velMotorDer = powMin;
+            velMotorDer = MIN_POWER_VALUE;
         }
         if (velMotorIzq > MAX_POWER_VALUE)
         {
