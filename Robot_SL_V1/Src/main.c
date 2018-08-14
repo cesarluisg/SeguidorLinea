@@ -189,7 +189,7 @@ enumBotonesStates botonesGetEstado(enumBotonesID boton_ID);
 #define MIN_SENSOR_VALUE		(-1000)
 
 /* Speed range defines */
-#define RACE_POWER_SET_VALUE	40
+#define RACE_POWER_SET_VALUE	50
 #define MAX_POWER_VALUE			100
 #define MIN_POWER_VALUE			0
 
@@ -878,22 +878,33 @@ void calcVel(int powMax, int powMin, double newCorrection)
     int velMotorDer = powMax;
 
     /* newCorrection es bueno que sea un double asi se puede multiplicar o dividir por un fraccional */
-    newCorrection = newCorrection/5;
+    newCorrection = newCorrection/10;
 
     if(newCorrection > 0)
     {
         velMotorIzq = velMotorIzq - (int) newCorrection;
+        velMotorDer = velMotorDer + (int) newCorrection;
         if (velMotorIzq < powMin)
         {
             velMotorIzq = powMin;
         }
+        if (velMotorDer > MAX_POWER_VALUE)
+        {
+            velMotorDer = MAX_POWER_VALUE;
+        }
+
     }
     else if (newCorrection < 0)
     {
         velMotorDer = velMotorDer + (int) newCorrection;
+        velMotorIzq = velMotorIzq - (int) newCorrection;
         if (velMotorDer < powMin)
         {
             velMotorDer = powMin;
+        }
+        if (velMotorIzq > MAX_POWER_VALUE)
+        {
+        	velMotorIzq = MAX_POWER_VALUE;
         }
     }
 
