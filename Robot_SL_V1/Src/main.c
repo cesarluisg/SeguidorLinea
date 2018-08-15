@@ -71,7 +71,7 @@ enum enumMotorFrenoState {MOTOR_FRENO_ST_LIBERADO, MOTOR_FRENO_ST_FRENADO};
 struct motores_struct
 {
 	uint8_t freno_state[MOTORES_COUNT_ID];	//Valores admitidos para freno_state: enumMotorFrenoState
-	uint8_t	velocidadSetPoint[MOTORES_COUNT_ID];		//Potencia actual de cada motor
+	uint16_t	velocidadSetPoint[MOTORES_COUNT_ID];		//Velocidad seteada para el motor
 	GPIO_TypeDef * frenoPinPort[MOTORES_COUNT_ID];		//Puerto del freno correspondiente
 	uint16_t frenoPin[MOTORES_COUNT_ID];			//frenoPin del puerto
 	PID_s * pidMotor[MOTORES_COUNT_ID];
@@ -123,20 +123,23 @@ struct botones_struct
 	uint16_t Pin[BOTONES_COUNT_ID];
 	uint8_t Estado[BOTONES_COUNT_ID];
 	uint8_t Tipo[BOTONES_COUNT_ID];
-	uint16_t RetardoAPresionado[BOTONES_COUNT_ID]; //Limitado por BOTONES_RETARDO_A_PRESIONADO_CICLOS
+	int16_t RetardoAPresionado[BOTONES_COUNT_ID]; //Limitado por BOTONES_RETARDO_A_PRESIONADO_CICLOS
 } BotonesData;
 /*** BOTONES END PV ***/
 
 /*** RUEDAS BEGIN PV ***/
-typedef enum enumRuedasID {RUEDAS_NOVALID_ID, RUEDA_IZQ_ID, RUEDA_DER_ID, RUEDAS_COUNT} enumRuedasID;
+typedef enum enumRuedasID {RUEDAS_NOVALID_ID, RUEDA_IZQ_ID, RUEDA_DER_ID, RUEDAS_COUNT_ID} enumRuedasID;
 typedef enum enumRuedasError {RUEDAS_ERR_SUCCESS, RUEDAS_ERR_ID_NOT_VALID} enumRuedasError;
 
 struct ruedas_structt
 {
 	uint32_t Circunferencia; //Longitud de la circunferencia de la rueda en micrones
-	uint16_t Velocidad[RUEDAS_COUNT]; //en (mm / s)
-	unsigned long int Odometro[RUEDAS_COUNT]; // en mm
-	uint32_t Count_Raw[RUEDAS_COUNT]; //Valor contado por el registro
+	uint16_t Velocidad[RUEDAS_COUNT_ID]; //en (mm / s)
+	uint16_t VelocidadAnt[RUEDAS_COUNT_ID]; //Guardar velocidad anterior.
+	unsigned long int Odometro[RUEDAS_COUNT_ID]; // Cantidad de mm rodados desde el reset
+	uint32_t Count_Raw[RUEDAS_COUNT_ID]; //Valor contado por el registro de los encoders
+	unsigned long int TimeOut[RUEDAS_COUNT_ID]; //Cantidad de ciclos de programa transcurridos sin una interrupción del encoder.
+	double dt[RUEDAS_COUNT_ID];
 }RuedasData;
 /*** RUEDAS END PV ***/
 
@@ -168,7 +171,7 @@ void debugPrint(char _out[]);
 
 /*** SENSORES AND MOTORES BEGIN PFP ***/
 
-enumMotorError motorInit (void); //Inicializa estructura de motores
+enumMotorError motoresInit (void); //Inicializa estructura de motores
 enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st); //Setea estado del freno del motor correspondiente
 enumMotorError motorSetPWM(enumMotorID motor_ID, uint8_t porcentaje); //NO USAR. Usar en su lugar motoresSetVelocidad.
 enumMotorError motoresSetVelocidad(enumMotorID motor_ID, uint16_t velocidad); //Setea la velocidad deseada del motor en mm/s
@@ -185,7 +188,7 @@ int16_t sensoresGetValActual(void); //Retorna posición de la línea relativa al c
 /*** LEDS BEGIN PFP ***/
 enumLedsError ledsInit(void); //Inicializar Leds
 enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st);
-
+void ledsService(void);
 /*** LEDS END PFP ***/
 
 /*** BOTONES BEGIN PFP ***/
@@ -199,6 +202,7 @@ enumRuedasError ruedasInit (void);
 uint16_t ruedasGetVelocidad(enumRuedasID ruedas_ID);
 unsigned long int ruedasGetOdometro(enumRuedasID ruedas_ID);
 enumRuedasError ruedaResetOdometro (enumRuedasID rueda_ID);
+void ruedasService(void);
 /*** RUEDAS END PFP ***/
 
 
@@ -213,19 +217,30 @@ enumRuedasError ruedaResetOdometro (enumRuedasID rueda_ID);
 #define MIN_SENSOR_VALUE		(-1000)
 
 /* Speed range defines */
-#define RACE_SPEED_SET_VALUE	1	/* Speed in mm/s */
-#define MAX_POWER_VALUE			100
-#define MIN_POWER_VALUE			0
+#define RACE_SPEED_SET_VALUE	(300)	/* Speed in mm/s */
+#define MAX_SPEED_VALUE			(3000)
+#define MIN_SPEED_VALUE			(0)
 
 /* Motors range defines */
 #define MOTOR_PWM_MAX_STEPS		(100)
-#define MOTOR_SPEED_MAX			(3500)		/* Máxima velocidad para el PID de motores*/
+#define MOTOR_SPEED_MAX			(3000)		/* Máxima velocidad para el PID de motores*/
 #define MOTOR_SPEED_MIN			(0)
+#define MOTOR_PID_KP_IZQ		(0.1)			/* KP PID MOTOR IZQ */
+#define MOTOR_PID_KP_DER		MOTOR_PID_KP_IZQ
+
 /* Botones defines */
-#define BOTONES_RETARDO_A_PRESIONADO_CICLOS	(100)	/* Expresado en ciclos del while de aprox 500us */
+#define BOTONES_RETARDO_A_PRESIONADO_CICLOS	(50)	/* Expresado en ciclos del while de aprox 500us */
+
+/* Ruedas defines */
+#define RUEDAS_TIMEOUT_CICLOS_0_VEL	(500)		//Controlar de relacionarlo con CORE_TIEMPO_CICLO, que represente este valor 1 segundo y medio
+
+/* Core defines */
+#define CORE_TIEMPO_CICLO		(0.0005)		//En segundos, el tiempo en segundos aproximado que consume el ciclo del programa
+
 /* Driver Mode */
 int _driverMode;
 
+char mensaje[200];
 //Función de interrupción
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
@@ -236,14 +251,25 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 	  RuedasData.Count_Raw[RUEDA_IZQ_ID] = __HAL_TIM_GET_COMPARE(&htim3, TIM_CHANNEL_1);    //read TIM2 channel 1 capture value
 	  __HAL_TIM_SET_COUNTER(&htim3, 0);    //reset counter after input capture interrupt occurs
 	  RuedasData.Odometro[RUEDA_IZQ_ID] += RuedasData.Circunferencia / 1000;
+	  RuedasData.TimeOut[RUEDA_IZQ_ID] = 0; //Reseteo Timeout de espera de la interrupción
+	  RuedasData.dt[RUEDA_IZQ_ID] = (double)RuedasData.Count_Raw[RUEDA_IZQ_ID] * 0.00002083333f;
+	  RuedasData.Velocidad[RUEDA_IZQ_ID] = (double)RuedasData.Circunferencia /4 /((double)RuedasData.dt[RUEDA_IZQ_ID]) /1000;
   }
   if (htim->Instance==TIM4)
   {
 	  RuedasData.Count_Raw[RUEDA_DER_ID] = __HAL_TIM_GET_COMPARE(&htim4, TIM_CHANNEL_1);    //read TIM2 channel 1 capture value
 	  __HAL_TIM_SET_COUNTER(&htim4, 0);    //reset counter after input capture interrupt occurs
 	  RuedasData.Odometro[RUEDA_DER_ID] += RuedasData.Circunferencia / 1000;
+	  RuedasData.TimeOut[RUEDA_DER_ID] = 0; //Reseteo Timeout de espera de la interrupción
+	  RuedasData.dt[RUEDA_DER_ID] = (double)RuedasData.Count_Raw[RUEDA_DER_ID] * 0.00002083333f;
+	  RuedasData.Velocidad[RUEDA_DER_ID] = (double)RuedasData.Circunferencia /4 /((double)RuedasData.dt[RUEDA_DER_ID]) /1000;
+
+//	  sprintf(mensaje,"dt %0.7f v %d\r\n", RuedasData.dt[RUEDA_DER_ID], RuedasData.Velocidad[RUEDA_DER_ID]);
+//	  debugPrint(mensaje);
+
   }
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -290,7 +316,7 @@ int main(void)
   //int readSpeed = 0;
 
   /*** SENSORES AND MOTORS USER CODE BEGIN 1 ***/
-  motorInit();
+  motoresInit();
   sensoresInit();
   ledsInit();
   botonesInit();
@@ -308,22 +334,22 @@ int main(void)
   if (true != pidGetPID(&pidSensores))
   	return -1;
   /* PID Sensor set default value */
-  pidSet( pidSensores, 0.0005, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.01, 0, 0);
+  pidSet( pidSensores, CORE_TIEMPO_CICLO, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.01, 0, 0);
 
   int16_t SensorValorActual;
 
   int botonPresionado = false;
 
   /* Set motor defualt value */
-  motoresSetVelocidad(MOTOR_DER_ID, 1);
-  motoresSetVelocidad(MOTOR_IZQ_ID, 1);
+  motoresSetVelocidad(MOTOR_DER_ID, 0);
+  motoresSetVelocidad(MOTOR_IZQ_ID, 0);
 
   /* Set meds default value */
   ledsSet(LED_DER_ID, LED_ST_OFF);
   ledsSet(LED_IZQ_ID, LED_ST_OFF);
 
   debugPrint("Seguidor de Linea \n");
-  char mensaje[200];
+
   //uint16_t valorActualTest;
 
   /* USER CODE END 2 */
@@ -336,7 +362,10 @@ int main(void)
 	  /* servicios */
 	  motoresService();
 	  botonesService();
-	  //sensoresGetValActual();
+	  ruedasService();
+	  ledsService();
+	  /*** TEST ZONE - Comentar en la versión Release ***/
+	  sensoresGetValActual();
 	  //motorSetPotencia(MOTOR_DER_ID, 40);
 	  //motorSetPotencia(MOTOR_IZQ_ID, 40);
 
@@ -345,10 +374,24 @@ int main(void)
 //											  ruedasGetVelocidad(RUEDA_IZQ_ID),
 //											  ruedasGetVelocidad(RUEDA_DER_ID));
 //	  debugPrint(mensaje);
-
-	//  HAL_Delay(50);
+	  //debugPrint("Activo ");
+/*
+	  if(botonesGetEstado(BOTON_DER_ID) == BOTON_ST_PRESIONADO)
+	  {
+		  debugPrint("Presionado \n\r");
+	  }
+	  else
+	  {
+		  debugPrint("No Presionado \n\r");
+	  }
+*/
+	  //motoresSetVelocidad(MOTOR_DER_ID, 1000);
+	  //motorSetPWM(MOTOR_DER_ID, 40);
+	  //HAL_Delay(500);
 
 	  //continue;
+
+	   /*** TEST ZONE - FIN ***/
 
 	  /* Check Mode */
 		switch (_driverMode) {
@@ -361,8 +404,8 @@ int main(void)
 				ledsSet(LED_IZQ_ID, LED_ST_OFF);
 
 				/* Set motor defualt value */
-				motoresSetVelocidad(MOTOR_DER_ID, 1);
-				motoresSetVelocidad(MOTOR_IZQ_ID, 1);
+				motoresSetVelocidad(MOTOR_DER_ID, 0);
+				motoresSetVelocidad(MOTOR_IZQ_ID, 0);
 				/* Go to Pre Race Mode */
 				_driverMode = PRE_RACE_MODE;
 				break;
@@ -379,8 +422,8 @@ int main(void)
 				/*Por ahora no tenemos esta funcionalidad, pero no se queda frenadoe en este punto y vuelve a PRE_RACE_MODE */
 
 				/* Set motor defualt value */
-				motoresSetVelocidad(MOTOR_DER_ID, 1);
-				motoresSetVelocidad(MOTOR_IZQ_ID, 1);
+				motoresSetVelocidad(MOTOR_DER_ID, 0);
+				motoresSetVelocidad(MOTOR_IZQ_ID, 0);
 				/* Go to Pre Race Mode */
 				_driverMode = PRE_RACE_MODE;
 				break;
@@ -412,7 +455,7 @@ int main(void)
 					//Example pidSet (pidSensores, 0.1, 100, -100, 0.7, 0.02, 0.1, 0, 0);
 
 					/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
-					pidSet( pidSensores, 0.0005, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1.4, 0.05425, 0, 0, 0);
+					pidSet( pidSensores, CORE_TIEMPO_CICLO, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1.4, 0.05425, 0, 0, 0);
 
 					/* default Value */
 					correction = 0;
@@ -443,6 +486,8 @@ int main(void)
 			case RACE_MODE:
 				/* Race Mode */
 
+				//debugPrint("RACE Mode \n\r ");
+
 				/* Get sensor error */
 				SensorValorActual = sensoresGetValActual();
 
@@ -471,8 +516,8 @@ int main(void)
 			//}
 
 			/* Set motor Race max value */
-			motoresSetVelocidad(MOTOR_DER_ID, 1);
-			motoresSetVelocidad(MOTOR_IZQ_ID, 1);
+			motoresSetVelocidad(MOTOR_DER_ID, 0);
+			motoresSetVelocidad(MOTOR_IZQ_ID, 0);
 
 			speedRace = RACE_SPEED_SET_VALUE;
 			botonPresionado = false;
@@ -942,7 +987,9 @@ void calcVel(int velRace, double newCorrection)
 {
 
 	/* newCorrection es bueno que sea un double asi se puede multiplicar o dividir por un fraccional */
-	    newCorrection = newCorrection/10;
+	//sprintf(mensaje, "c %f \n\r", newCorrection);
+	//debugPrint(mensaje);
+	    newCorrection = newCorrection * 10;
 /*
 	    double auxNew = newCorrection;
 
@@ -965,29 +1012,29 @@ void calcVel(int velRace, double newCorrection)
 
     if(newCorrection > 0)
     {
-        velMotorIzq = velMotorIzq - (int) newCorrection * 3;	// *1.8
-        velMotorDer = velMotorDer + (int) newCorrection / 3;	// /3
-        if (velMotorIzq < MIN_POWER_VALUE)
+        velMotorIzq = velMotorIzq - (int) newCorrection;	// *1.8
+        velMotorDer = velMotorDer + (int) newCorrection;	// /3
+        if (velMotorIzq < MIN_SPEED_VALUE)
         {
-            velMotorIzq = MIN_POWER_VALUE;
+            velMotorIzq = MIN_SPEED_VALUE;
         }
-        if (velMotorDer > MAX_POWER_VALUE)
+        if (velMotorDer > MAX_SPEED_VALUE)
         {
-            velMotorDer = MAX_POWER_VALUE;
+            velMotorDer = MAX_SPEED_VALUE;
         }
 
     }
     else if (newCorrection < 0)
     {
-        velMotorDer = velMotorDer + (int) newCorrection * 3;	// *1.8
-        velMotorIzq = velMotorIzq - (int) newCorrection / 3; 	// /3
-        if (velMotorDer < MIN_POWER_VALUE)
+        velMotorDer = velMotorDer + (int) newCorrection;	// *1.8
+        velMotorIzq = velMotorIzq - (int) newCorrection; 	// /3
+        if (velMotorDer < MIN_SPEED_VALUE)
         {
-            velMotorDer = MIN_POWER_VALUE;
+            velMotorDer = MIN_SPEED_VALUE;
         }
-        if (velMotorIzq > MAX_POWER_VALUE)
+        if (velMotorIzq > MAX_SPEED_VALUE)
         {
-        	velMotorIzq = MAX_POWER_VALUE;
+        	velMotorIzq = MAX_SPEED_VALUE;
         }
     }
 
@@ -1003,9 +1050,9 @@ int changeMaxSpeed(int currSpeedMax)
 	    /* increase speed on 10% */
 	    newSpeed += 10;
 	    /* Check overflow */
-	    if(newSpeed > MAX_POWER_VALUE)
+	    if(newSpeed > MAX_SPEED_VALUE)
 	    {
-	    	newSpeed = MAX_POWER_VALUE;
+	    	newSpeed = MAX_SPEED_VALUE;
 	    }
 	    return newSpeed;
 }
@@ -1016,7 +1063,7 @@ int changeMaxSpeed(int currSpeedMax)
  * @param motor_ID: MOTOR_IZQ_ID ó MOTOR_DER_ID
  * @param potencia: Potencia a inyectar al motor, desde 0 a MOTOR_POT_MAX
  */
-enumMotorError motorInit (void)
+enumMotorError motoresInit (void)
 {
 
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -1029,11 +1076,11 @@ enumMotorError motorInit (void)
 
 	if (true != pidGetPID(&MotoresData.pidMotor[MOTOR_DER_ID]))
 		return -1;
-	pidSet( MotoresData.pidMotor[MOTOR_DER_ID], 0.0005, MOTOR_SPEED_MAX, MOTOR_SPEED_MIN, 0.7, 0, 0, 0, 0);
+	pidSet( MotoresData.pidMotor[MOTOR_DER_ID], CORE_TIEMPO_CICLO, MOTOR_SPEED_MAX, MOTOR_SPEED_MIN, MOTOR_PID_KP_DER, 0, 0, 0, 0);
 
 	if (true != pidGetPID(&MotoresData.pidMotor[MOTOR_IZQ_ID]))
 		return -1;
-	pidSet( MotoresData.pidMotor[MOTOR_IZQ_ID], 0.0005, MOTOR_SPEED_MAX, MOTOR_SPEED_MIN, 0.7, 0, 0, 0, 0);
+	pidSet( MotoresData.pidMotor[MOTOR_IZQ_ID], CORE_TIEMPO_CICLO, MOTOR_SPEED_MAX, MOTOR_SPEED_MIN, MOTOR_PID_KP_IZQ, 0, 0, 0, 0);
 
 	MotoresData.PWM_Actual[MOTOR_IZQ_ID] = 0;
 	MotoresData.PWM_Actual[MOTOR_DER_ID] = 0;
@@ -1146,34 +1193,68 @@ enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st)
  */
 void motoresService (void)
 {
-	double correction;
+	double correction = 0;
 	enumMotorID motor_ID;
+	enumRuedasID rueda_ID;
+
 	int16_t	PWM;
 
 	/* CORREGIR MOTORES */
 	for (motor_ID = MOTOR_IZQ_ID; motor_ID < MOTORES_COUNT_ID; motor_ID++)
 	{
-		correction = pidCalculate(MotoresData.pidMotor[motor_ID], MotoresData.velocidadSetPoint[motor_ID], (double) ruedasGetVelocidad(motor_ID));
-
-		//PWM actual
-		PWM = motorGetPWM(motor_ID);
-
-		//Corregir PWM
-		if((PWM + correction) < 0)
-		{
-			PWM = 0;
-		}
-		else if((PWM + correction) > MOTOR_PWM_MAX_STEPS)
-		{
-			PWM = MOTOR_PWM_MAX_STEPS;
-		}
+		if(motor_ID == MOTOR_IZQ_ID)
+			rueda_ID = RUEDA_IZQ_ID;
 		else
-		{
-			PWM += correction;
-		}
+			rueda_ID = RUEDA_DER_ID;
 
-		//Setear nuevo valor de PWM
-		motorSetPWM(motor_ID, PWM);
+		if((RuedasData.Velocidad[rueda_ID] != RuedasData.VelocidadAnt[rueda_ID]) || (RuedasData.Velocidad[rueda_ID] == 0))
+		{
+			//DEBUG
+			ledsSet(LED_DER_ID, LED_ST_ON);
+			//END DEBUG
+
+			RuedasData.VelocidadAnt[rueda_ID] = RuedasData.Velocidad[rueda_ID];
+
+			pidSet( MotoresData.pidMotor[motor_ID], RuedasData.dt[rueda_ID], MOTOR_SPEED_MAX, -MOTOR_SPEED_MAX,
+					MOTOR_PID_KP_DER, 0, 0,
+					MotoresData.pidMotor[motor_ID]->pre_error, MotoresData.pidMotor[motor_ID]->integral);
+			correction = pidCalculate(MotoresData.pidMotor[motor_ID], MotoresData.velocidadSetPoint[motor_ID], (double) ruedasGetVelocidad(rueda_ID));
+
+
+
+			//Llevar a escala de PWM la corrección hecha en velocidad
+			correction = correction * MOTOR_PWM_MAX_STEPS / MOTOR_SPEED_MAX;
+
+
+
+			//PWM actual
+			PWM = motorGetPWM(motor_ID);
+
+			//Corregir PWM
+			if((PWM + correction) < 0)
+			{
+				PWM = 0;
+			}
+			else if((PWM + correction) > MOTOR_PWM_MAX_STEPS)
+			{
+				PWM = MOTOR_PWM_MAX_STEPS;
+			}
+			else
+			{
+				PWM += correction;
+			}
+
+/*
+			if(motor_ID == MOTOR_DER_ID)
+			{
+				sprintf(mensaje, "pw %d setp %d, getv %d, va %d,  corr %d \n\r", PWM, MotoresData.velocidadSetPoint[motor_ID],  ruedasGetVelocidad(rueda_ID), RuedasData.VelocidadAnt[rueda_ID], (uint16_t)correction);
+				debugPrint(mensaje);
+			}
+*/
+			//Setear nuevo valor de PWM
+			motorSetPWM(motor_ID, (uint8_t)PWM);
+			//motorSetPWM(MOTOR_DER_ID, 40);
+		}
 	}
 
 }
@@ -1475,7 +1556,12 @@ enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st)
 	return LED_ERR_SUCCESS;
 }
 
-
+void ledsService(void)
+{
+	//Por ahora es solo apagar los leds por cuestiones de testing
+	ledsSet(LED_DER_ID, LED_ST_OFF);
+	ledsSet(LED_IZQ_ID, LED_ST_OFF);
+}
 /*** LEDS FUNCTION DEF END ***/
 
 /*** BOTONES FUNCTION DEF BEGIN ***/
@@ -1490,6 +1576,11 @@ enumBotonesError botonesInit(void)
 	BotonesData.Port[BOTON_CENTRAL_ID] = PUL_ARRANQUE_GPIO_Port;
 	BotonesData.Pin[BOTON_CENTRAL_ID] = PUL_ARRANQUE_Pin;
 	BotonesData.Tipo[BOTON_CENTRAL_ID] = BOTONES_TIPO_NC;
+
+	for(enumBotonesID botones_ID = BOTONES_NOVALID_ID + 1; botones_ID < BOTONES_COUNT_ID; botones_ID++)
+	{
+		BotonesData.RetardoAPresionado[botones_ID] = 0;
+	}
 
 	return BOTONES_ERR_SUCCESS;
 }
@@ -1510,44 +1601,42 @@ void botonesService(void)
 {
 	for (enumBotonesID boton_ID = BOTONES_NOVALID_ID + 1; boton_ID < BOTONES_COUNT_ID; boton_ID++)
 	{
-		if(BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NC)
+		if(((HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET) && (BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NC))
+				||((HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_RESET) && (BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NA)))
 		{
-			if(((HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET) && (BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NC))
-					||((HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_RESET) && (BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NA)))
+			if(BotonesData.RetardoAPresionado[boton_ID] < BOTONES_RETARDO_A_PRESIONADO_CICLOS)
 			{
-				if(BotonesData.RetardoAPresionado[boton_ID] < BOTONES_RETARDO_A_PRESIONADO_CICLOS)
-				{
-					BotonesData.RetardoAPresionado[boton_ID]++;
-				}
-				else
-				{
-					BotonesData.RetardoAPresionado[boton_ID] = BOTONES_RETARDO_A_PRESIONADO_CICLOS;
-				}
+				BotonesData.RetardoAPresionado[boton_ID]++;
 			}
 			else
 			{
-				if(BotonesData.RetardoAPresionado[boton_ID] > 0)
-				{
-					BotonesData.RetardoAPresionado[boton_ID]--;
-				}
-				else
-				{
-					BotonesData.RetardoAPresionado[boton_ID] = 0;
-				}
+				BotonesData.RetardoAPresionado[boton_ID] = BOTONES_RETARDO_A_PRESIONADO_CICLOS;
 			}
+		}
+		else
+		{
+			if(BotonesData.RetardoAPresionado[boton_ID] > 0)
+			{
+				BotonesData.RetardoAPresionado[boton_ID]--;
+			}
+			else
+			{
+				BotonesData.RetardoAPresionado[boton_ID] = 0;
+			}
+		}
 
-			if(BotonesData.RetardoAPresionado[boton_ID] == BOTONES_RETARDO_A_PRESIONADO_CICLOS)
-			{
-				BotonesData.Estado[boton_ID] = BOTON_ST_PRESIONADO;
-			}
-			else if(BotonesData.RetardoAPresionado[boton_ID] == 0)
-			{
-				BotonesData.Estado[boton_ID] = BOTON_ST_NO_PRESIONADO;
-			}
-			else
-			{
-				//Mantiene estado anterior
-			}
+
+		if(BotonesData.RetardoAPresionado[boton_ID] == BOTONES_RETARDO_A_PRESIONADO_CICLOS)
+		{
+			BotonesData.Estado[boton_ID] = BOTON_ST_PRESIONADO;
+		}
+		else if(BotonesData.RetardoAPresionado[boton_ID] == 0)
+		{
+			BotonesData.Estado[boton_ID] = BOTON_ST_NO_PRESIONADO;
+		}
+		else
+		{
+			//Mantiene estado anterior
 		}
 
 	}
@@ -1560,6 +1649,13 @@ void botonesService(void)
 enumRuedasError ruedasInit (void)
 {
 	RuedasData.Circunferencia = 94248; //Longitud de la circunferencia de la rueda en micrones
+	for (enumRuedasID rueda_ID = RUEDAS_NOVALID_ID + 1; rueda_ID < RUEDAS_COUNT_ID ; rueda_ID++)
+	{
+		RuedasData.Velocidad[rueda_ID] = 0;
+		RuedasData.TimeOut[rueda_ID] = 0;
+		RuedasData.Odometro[rueda_ID] = 0;
+	}
+
 	HAL_TIM_IC_Start_IT(&htim3, TIM_CHANNEL_1);
 	HAL_TIM_IC_Start_IT(&htim4, TIM_CHANNEL_1);
 	return RUEDAS_ERR_SUCCESS;
@@ -1567,27 +1663,28 @@ enumRuedasError ruedasInit (void)
 
 uint16_t ruedasGetVelocidad(enumRuedasID rueda_ID)
 {
-	if(rueda_ID > RUEDAS_NOVALID_ID && rueda_ID < RUEDAS_COUNT)
+	if(rueda_ID > RUEDAS_NOVALID_ID && rueda_ID < RUEDAS_COUNT_ID)
 	{
-		if(RuedasData.Count_Raw[rueda_ID])
-		{
-			RuedasData.Velocidad[rueda_ID] = (double)RuedasData.Circunferencia /4 /((double)RuedasData.Count_Raw[rueda_ID] * 0.00002083333) /1000;
+//		if(RuedasData.Count_Raw[rueda_ID])
+//		{
+			//RuedasData.Velocidad[rueda_ID] = (double)RuedasData.Circunferencia /4 /((double)RuedasData.Count_Raw[rueda_ID] * 0.00002083333) /1000;
 			return RuedasData.Velocidad[rueda_ID];
-		}
-		else
-		{
-			//Algo anda mal por aquí pero no hago nada
-			return 0;
-		}
+//		}
+//		else
+//		{
+			//Casos aún no completamente determinados, uno es cuando el robot arranca y nucna giraron las ruedas
+//			return 0;
+//		}
 	}
 	else
 	{
 		return 0;
 	}
 }
+
 unsigned long int ruedasGetOdometro(enumRuedasID rueda_ID)
 {
-	if(rueda_ID > RUEDAS_NOVALID_ID && rueda_ID < RUEDAS_COUNT)
+	if(rueda_ID > RUEDAS_NOVALID_ID && rueda_ID < RUEDAS_COUNT_ID)
 	{
 		return RuedasData.Odometro[rueda_ID];
 	}
@@ -1599,7 +1696,7 @@ unsigned long int ruedasGetOdometro(enumRuedasID rueda_ID)
 
 enumRuedasError ruedaResetOdometro (enumRuedasID rueda_ID)
 {
-	if(rueda_ID > RUEDAS_NOVALID_ID && rueda_ID < RUEDAS_COUNT)
+	if(rueda_ID > RUEDAS_NOVALID_ID && rueda_ID < RUEDAS_COUNT_ID)
 	{
 		RuedasData.Odometro[rueda_ID] = 0;
 		return RUEDAS_ERR_SUCCESS;
@@ -1610,6 +1707,33 @@ enumRuedasError ruedaResetOdometro (enumRuedasID rueda_ID)
 
 	}
 }
+
+void ruedasService(void)
+{
+	enumRuedasID rueda_ID;
+	// Contabilizar tiempo hasta la próxima interrupción
+	for(rueda_ID = RUEDAS_NOVALID_ID + 1; rueda_ID < RUEDAS_COUNT_ID; rueda_ID++)
+	{
+		if(rueda_ID == RUEDA_DER_ID)
+		{
+			ledsSet(LED_DER_ID, LED_ST_ON);
+			//sprintf(mensaje," TO %ld ", (uint32_t)RuedasData.TimeOut[rueda_ID]);
+			//debugPrint(mensaje);
+		}
+
+		RuedasData.TimeOut[rueda_ID]++;
+		if(RuedasData.TimeOut[rueda_ID] > RUEDAS_TIMEOUT_CICLOS_0_VEL)
+		{
+			//debugPrint("Vel 0");
+
+
+			RuedasData.Velocidad[rueda_ID] = 0; //Llevar a cero la velocidad porque no han entrado interrupciones en RUEDAS_TIMEOUT_CICLOS_0_VEL * CORE_TIEMPO_CICLO
+			RuedasData.TimeOut[rueda_ID] = 0; //Espero Otro TimeOut
+		}
+	}
+
+}
+
 
 /*** RUEDA FUNCTION DEF END ***/
 
