@@ -62,7 +62,7 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN PV */
 
 /*** MOTORES BEGIN PV ***/
-typedef enum enumMotorID {MOTOR_ID_NOVALID,	MOTOR_IZQ_ID, MOTOR_DER_ID} enumMotorID;
+typedef enum enumMotorID {MOTOR_ID_NOVALID,	MOTOR_IZQ_ID, MOTOR_DER_ID, MOTORES_COUNT_ID} enumMotorID;
 typedef enum enumMotorFreno {MOTOR_FRENO_FRENAR, MOTOR_FRENO_LIBERAR} enumMotorFreno;
 typedef enum enumMotorError {MOTOR_ERR_SUCCESS, MOTOR_ERR_ID_INVALID, MOTOR_ERR_POT_OUT_OF_RANGE, MOTOR_ERR_FRENO_ST_NOTVALID} enumMotorError;
 
@@ -70,10 +70,12 @@ enum enumMotorFrenoState {MOTOR_FRENO_ST_LIBERADO, MOTOR_FRENO_ST_FRENADO};
 
 struct motores_struct
 {
-	uint8_t freno_state[MOTOR_DER_ID];	//Valores admitidos para freno_state: enumMotorFrenoState
-	uint8_t	potencia[MOTOR_DER_ID];		//Potencia actual de cada motor
-	GPIO_TypeDef * frenoPinPort[MOTOR_DER_ID];		//Puerto del freno correspondiente
-	uint16_t frenoPin[MOTOR_DER_ID];			//frenoPin del puerto
+	uint8_t freno_state[MOTORES_COUNT_ID];	//Valores admitidos para freno_state: enumMotorFrenoState
+	uint8_t	velocidadSetPoint[MOTORES_COUNT_ID];		//Potencia actual de cada motor
+	GPIO_TypeDef * frenoPinPort[MOTORES_COUNT_ID];		//Puerto del freno correspondiente
+	uint16_t frenoPin[MOTORES_COUNT_ID];			//frenoPin del puerto
+	PID_s * pidMotor[MOTORES_COUNT_ID];
+	uint8_t PWM_Actual[MOTORES_COUNT_ID];
 } MotoresData;
 
 /*** MOTORES END PV ***/
@@ -110,14 +112,18 @@ struct leds_struct
 /*** LEDS END PV ***/
 
 /*** BOTONES BEGIN PV ***/
-typedef enum enumBotonesID {BOTONES_NOVALID_ID, BOTON_IZQ_ID, BOTON_DER_ID, BOTON_CENTRAL_ID, BOTON_COUNT_ID} enumBotonesID;
+typedef enum enumBotonesID {BOTONES_NOVALID_ID, BOTON_IZQ_ID, BOTON_DER_ID, BOTON_CENTRAL_ID, BOTONES_COUNT_ID} enumBotonesID;
 typedef enum enumBotonesStates {BOTON_ST_PRESIONADO, BOTON_ST_NO_PRESIONADO, BOTONES_ST_ERROR_ID} enumBotonesStates;
 typedef enum enumBotonesError {BOTONES_ERR_SUCCESS, BOTONES_ERR_ID_NO_VALID} enumBotonesError;
+typedef enum enumBotonesTipo {BOTONES_TIPO_NA, BOTONES_TIPO_NC} enumBotonesTipo;
+
 struct botones_struct
 {
-	GPIO_TypeDef * Port[BOTON_COUNT_ID];
-	uint16_t Pin[BOTON_COUNT_ID];
-	uint8_t Estado[BOTON_COUNT_ID];
+	GPIO_TypeDef * Port[BOTONES_COUNT_ID];
+	uint16_t Pin[BOTONES_COUNT_ID];
+	uint8_t Estado[BOTONES_COUNT_ID];
+	uint8_t Tipo[BOTONES_COUNT_ID];
+	uint16_t RetardoAPresionado[BOTONES_COUNT_ID]; //Limitado por BOTONES_RETARDO_A_PRESIONADO_CICLOS
 } BotonesData;
 /*** BOTONES END PV ***/
 
@@ -156,7 +162,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 /* USER CODE BEGIN PFP */
 
 void calcVel(int velRace, double newCorrection);
-int changeMaxPower(int currPowMax);
+int changeMaxSpeed(int currSpeedMax);
 
 void debugPrint(char _out[]);
 
@@ -164,7 +170,11 @@ void debugPrint(char _out[]);
 
 enumMotorError motorInit (void); //Inicializa estructura de motores
 enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st); //Setea estado del freno del motor correspondiente
-enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia); //Setea potencia del motor correspondiente
+enumMotorError motorSetPWM(enumMotorID motor_ID, uint8_t porcentaje); //NO USAR. Usar en su lugar motoresSetVelocidad.
+enumMotorError motoresSetVelocidad(enumMotorID motor_ID, uint16_t velocidad); //Setea la velocidad deseada del motor en mm/s
+uint8_t motorGetPWM(enumMotorID motor_ID);
+void motoresService(void); //Presta servicio a los motores
+
 
 enumSensoresError sensoresInit(); //Inicializa estructura de Sensores
 enumSensoresError sensoresReadyToRace(void); //Reinicia el módulo para iniciar una carrera.
@@ -181,6 +191,7 @@ enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st);
 /*** BOTONES BEGIN PFP ***/
 enumBotonesError botonesInit(void); //Inicializar Leds
 enumBotonesStates botonesGetEstado(enumBotonesID boton_ID);
+void botonesService(void); //Presta servicio a los pulsadores
 /*** BOTONES END PFP ***/
 
 /*** RUEDAS BEGIN PFP ***/
@@ -202,10 +213,16 @@ enumRuedasError ruedaResetOdometro (enumRuedasID rueda_ID);
 #define MIN_SENSOR_VALUE		(-1000)
 
 /* Speed range defines */
-#define RACE_POWER_SET_VALUE	50
+#define RACE_SPEED_SET_VALUE	1	/* Speed in mm/s */
 #define MAX_POWER_VALUE			100
 #define MIN_POWER_VALUE			0
 
+/* Motors range defines */
+#define MOTOR_PWM_MAX_STEPS		(100)
+#define MOTOR_SPEED_MAX			(3500)		/* Máxima velocidad para el PID de motores*/
+#define MOTOR_SPEED_MIN			(0)
+/* Botones defines */
+#define BOTONES_RETARDO_A_PRESIONADO_CICLOS	(100)	/* Expresado en ciclos del while de aprox 500us */
 /* Driver Mode */
 int _driverMode;
 
@@ -240,7 +257,7 @@ int main(void)
 
 	double correction = 0;
 
-	int powRace = RACE_POWER_SET_VALUE;
+	int speedRace = RACE_SPEED_SET_VALUE;
 
   /* USER CODE END 1 */
 
@@ -291,15 +308,15 @@ int main(void)
   if (true != pidGetPID(&pidSensores))
   	return -1;
   /* PID Sensor set default value */
-  pidSet( pidSensores, 0.01, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.01, 0, 0);
+  pidSet( pidSensores, 0.0005, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.01, 0, 0);
 
   int16_t SensorValorActual;
 
   int botonPresionado = false;
 
   /* Set motor defualt value */
-  motorSetPotencia(MOTOR_DER_ID, 1);
-  motorSetPotencia(MOTOR_IZQ_ID, 1);
+  motoresSetVelocidad(MOTOR_DER_ID, 1);
+  motoresSetVelocidad(MOTOR_IZQ_ID, 1);
 
   /* Set meds default value */
   ledsSet(LED_DER_ID, LED_ST_OFF);
@@ -316,6 +333,9 @@ int main(void)
   while (1)
   {
 
+	  /* servicios */
+	  motoresService();
+	  botonesService();
 	  //sensoresGetValActual();
 	  //motorSetPotencia(MOTOR_DER_ID, 40);
 	  //motorSetPotencia(MOTOR_IZQ_ID, 40);
@@ -341,8 +361,8 @@ int main(void)
 				ledsSet(LED_IZQ_ID, LED_ST_OFF);
 
 				/* Set motor defualt value */
-				motorSetPotencia(MOTOR_DER_ID, 1);
-				motorSetPotencia(MOTOR_IZQ_ID, 1);
+				motoresSetVelocidad(MOTOR_DER_ID, 1);
+				motoresSetVelocidad(MOTOR_IZQ_ID, 1);
 				/* Go to Pre Race Mode */
 				_driverMode = PRE_RACE_MODE;
 				break;
@@ -359,8 +379,8 @@ int main(void)
 				/*Por ahora no tenemos esta funcionalidad, pero no se queda frenadoe en este punto y vuelve a PRE_RACE_MODE */
 
 				/* Set motor defualt value */
-				motorSetPotencia(MOTOR_DER_ID, 1);
-				motorSetPotencia(MOTOR_IZQ_ID, 1);
+				motoresSetVelocidad(MOTOR_DER_ID, 1);
+				motoresSetVelocidad(MOTOR_IZQ_ID, 1);
 				/* Go to Pre Race Mode */
 				_driverMode = PRE_RACE_MODE;
 				break;
@@ -377,7 +397,7 @@ int main(void)
 				if(botonesGetEstado(BOTON_IZQ_ID) == BOTON_ST_PRESIONADO)
 				{
 					/* take new power value */
-					powRace = changeMaxPower(powRace);
+					speedRace = changeMaxSpeed(speedRace);
 
 					/* Led Power Value */
 					//ledsSet(LED_DER_ID, LED_ST_ON);
@@ -392,7 +412,7 @@ int main(void)
 					//Example pidSet (pidSensores, 0.1, 100, -100, 0.7, 0.02, 0.1, 0, 0);
 
 					/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
-					pidSet( pidSensores, 0.1, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.1, 0, 0);
+					pidSet( pidSensores, 0.0005, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1.4, 0.05425, 0, 0, 0);
 
 					/* default Value */
 					correction = 0;
@@ -407,8 +427,8 @@ int main(void)
 						botonPresionado = false;
 
 						/* Set motor Race max value */
-						motorSetPotencia(MOTOR_DER_ID, powRace);
-						motorSetPotencia(MOTOR_IZQ_ID, powRace);
+						motoresSetVelocidad(MOTOR_DER_ID, speedRace);
+						motoresSetVelocidad(MOTOR_IZQ_ID, speedRace);
 
 						/* Set led */
 						ledsSet(LED_DER_ID, LED_ST_ON);
@@ -430,7 +450,7 @@ int main(void)
 				correction = pidCalculate(pidSensores, SENSOR_SET_POINT_VALUE, (double) SensorValorActual);
 
 				/* Calculate velocity of a motors and set values */
-				calcVel(powRace, correction);
+				calcVel(speedRace, correction);
 
 				break;
 
@@ -451,9 +471,10 @@ int main(void)
 			//}
 
 			/* Set motor Race max value */
-			motorSetPotencia(MOTOR_DER_ID, 1);
-			motorSetPotencia(MOTOR_IZQ_ID, 1);
+			motoresSetVelocidad(MOTOR_DER_ID, 1);
+			motoresSetVelocidad(MOTOR_IZQ_ID, 1);
 
+			speedRace = RACE_SPEED_SET_VALUE;
 			botonPresionado = false;
 			_driverMode = PRE_RACE_MODE;
 		}
@@ -944,8 +965,8 @@ void calcVel(int velRace, double newCorrection)
 
     if(newCorrection > 0)
     {
-        velMotorIzq = velMotorIzq - (int) newCorrection;	// *1.8
-        velMotorDer = velMotorDer + (int) newCorrection;	// /3
+        velMotorIzq = velMotorIzq - (int) newCorrection * 3;	// *1.8
+        velMotorDer = velMotorDer + (int) newCorrection / 3;	// /3
         if (velMotorIzq < MIN_POWER_VALUE)
         {
             velMotorIzq = MIN_POWER_VALUE;
@@ -958,8 +979,8 @@ void calcVel(int velRace, double newCorrection)
     }
     else if (newCorrection < 0)
     {
-        velMotorDer = velMotorDer + (int) newCorrection;	// *1.8
-        velMotorIzq = velMotorIzq - (int) newCorrection; 	// /3
+        velMotorDer = velMotorDer + (int) newCorrection * 3;	// *1.8
+        velMotorIzq = velMotorIzq - (int) newCorrection / 3; 	// /3
         if (velMotorDer < MIN_POWER_VALUE)
         {
             velMotorDer = MIN_POWER_VALUE;
@@ -970,24 +991,23 @@ void calcVel(int velRace, double newCorrection)
         }
     }
 
-    /* Set motor power */
-	motorSetPotencia(MOTOR_DER_ID, velMotorDer);
-	motorSetPotencia(MOTOR_IZQ_ID, velMotorIzq);
+    /* Set motor speed */
+	motoresSetVelocidad(MOTOR_DER_ID, velMotorDer);
+	motoresSetVelocidad(MOTOR_IZQ_ID, velMotorIzq);
 
 }
 
-int changeMaxPower(int currPowMax)
+int changeMaxSpeed(int currSpeedMax)
 {
-	 int newPower = currPowMax;
-	    /* increase power on 10% */
-	    newPower += 10;
+	 int newSpeed = currSpeedMax;
+	    /* increase speed on 10% */
+	    newSpeed += 10;
 	    /* Check overflow */
-	    if(newPower > MAX_POWER_VALUE)
+	    if(newSpeed > MAX_POWER_VALUE)
 	    {
-	    	/* Set half of power 50% */
-	    	newPower = MAX_POWER_VALUE/2;
+	    	newSpeed = MAX_POWER_VALUE;
 	    }
-	    return newPower;
+	    return newSpeed;
 }
 
 /*** MOTORES FUNCTION DEF BEGIN ***/
@@ -1007,18 +1027,29 @@ enumMotorError motorInit (void)
 	MotoresData.frenoPinPort[MOTOR_IZQ_ID] = Freno_IZQ_GPIO_Port;
 	MotoresData.frenoPin[MOTOR_IZQ_ID] = Freno_IZQ_Pin;
 
+	if (true != pidGetPID(&MotoresData.pidMotor[MOTOR_DER_ID]))
+		return -1;
+	pidSet( MotoresData.pidMotor[MOTOR_DER_ID], 0.0005, MOTOR_SPEED_MAX, MOTOR_SPEED_MIN, 0.7, 0, 0, 0, 0);
+
+	if (true != pidGetPID(&MotoresData.pidMotor[MOTOR_IZQ_ID]))
+		return -1;
+	pidSet( MotoresData.pidMotor[MOTOR_IZQ_ID], 0.0005, MOTOR_SPEED_MAX, MOTOR_SPEED_MIN, 0.7, 0, 0, 0, 0);
+
+	MotoresData.PWM_Actual[MOTOR_IZQ_ID] = 0;
+	MotoresData.PWM_Actual[MOTOR_DER_ID] = 0;
+
 	return MOTOR_ERR_SUCCESS;
 }
 
 /**
  * @brief Esta función envía potencia a los motores en PWM
  * @param motor_ID: MOTOR_IZQ_ID ó MOTOR_DER_ID
- * @param potencia: Potencia a inyectar, desde 0 a MOTOR_POT_MAX
+ * @param porcentaje: Valor en porcentaje del ancho del pulso del PWM
  */
-enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
+enumMotorError motorSetPWM(enumMotorID motor_ID, uint8_t porcentaje)
 {
 	//char mensaje[100];
-	//sprintf(mensaje, "Setear ID %d, Potencia %d \n\r", motor_ID, potencia);
+	//sprintf(mensaje, "Setear ID %d, Potencia %d \n\r", motor_ID, velocidad);
 	//debugPrint(mensaje);
 
 	//Verifico ID del motor
@@ -1034,29 +1065,35 @@ enumMotorError motorSetPotencia(enumMotorID motor_ID, uint8_t potencia)
 		HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_LIBERAR);
 	}
 
+	//Limitar porcentaje de PWM
+	if (porcentaje > MOTOR_POT_MAX)
+		porcentaje = MOTOR_POT_MAX;
+
 	//Cambiar PWM del motor indicado a la potencia especificada
-	if (potencia <= MOTOR_POT_MAX)
+	if(motor_ID == MOTOR_DER_ID)
 	{
-		if(motor_ID == MOTOR_DER_ID)
-		{
-			//sprintf(mensaje, "Estoy setenado Potencia \n");
-			//debugPrint(mensaje);
+		//sprintf(mensaje, "Estoy setenado Potencia \n");
+		//debugPrint(mensaje);
 
-			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
-		}
-		else
-		{
-
-			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, potencia * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
-		}
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, porcentaje * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
 	}
 	else
 	{
-		return MOTOR_ERR_POT_OUT_OF_RANGE;
+
+		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, porcentaje * MOTOR_PWM_STEPS / MOTOR_POT_MAX);
 	}
+
+	//Guardar valor seteado en la estructura
+	MotoresData.PWM_Actual[motor_ID] = porcentaje;
 
 	return MOTOR_ERR_SUCCESS;
 }
+
+uint8_t motorGetPWM(enumMotorID motor_ID)
+{
+	return MotoresData.PWM_Actual[motor_ID];
+}
+
 
 /**
  * @brief Esta función frena el motor especificado
@@ -1101,6 +1138,59 @@ enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st)
 
 	return MOTOR_ERR_SUCCESS;
 }
+
+/**
+ * @brief Esta función mantiene valores de los motores, principalmente regula el PWM para
+ * mantener la velocidad seteda
+ * @param none
+ */
+void motoresService (void)
+{
+	double correction;
+	enumMotorID motor_ID;
+	int16_t	PWM;
+
+	/* CORREGIR MOTORES */
+	for (motor_ID = MOTOR_IZQ_ID; motor_ID < MOTORES_COUNT_ID; motor_ID++)
+	{
+		correction = pidCalculate(MotoresData.pidMotor[motor_ID], MotoresData.velocidadSetPoint[motor_ID], (double) ruedasGetVelocidad(motor_ID));
+
+		//PWM actual
+		PWM = motorGetPWM(motor_ID);
+
+		//Corregir PWM
+		if((PWM + correction) < 0)
+		{
+			PWM = 0;
+		}
+		else if((PWM + correction) > MOTOR_PWM_MAX_STEPS)
+		{
+			PWM = MOTOR_PWM_MAX_STEPS;
+		}
+		else
+		{
+			PWM += correction;
+		}
+
+		//Setear nuevo valor de PWM
+		motorSetPWM(motor_ID, PWM);
+	}
+
+}
+
+enumMotorError motoresSetVelocidad(enumMotorID motor_ID, uint16_t velocidad)
+{
+	if(motor_ID > MOTOR_ID_NOVALID && motor_ID < MOTORES_COUNT_ID)
+	{
+		MotoresData.velocidadSetPoint[motor_ID] = velocidad;
+		return MOTOR_ERR_SUCCESS;
+	}
+	else
+	{
+		return MOTOR_ERR_ID_INVALID;
+	}
+}
+
 /*** MOTORES FUNCTION DEF END ***/
 
 /*** SENSORES FUNCTION DEF BEGIN ***/
@@ -1393,31 +1483,75 @@ enumBotonesError botonesInit(void)
 {
 	BotonesData.Port[BOTON_IZQ_ID] = BOTON_1_IN_GPIO_Port;
 	BotonesData.Pin[BOTON_IZQ_ID] = BOTON_1_IN_Pin;
+	BotonesData.Tipo[BOTON_IZQ_ID] = BOTONES_TIPO_NA;
 	BotonesData.Port[BOTON_DER_ID] = BOTON_2_IN_GPIO_Port;
 	BotonesData.Pin[BOTON_DER_ID] = BOTON_2_IN_Pin;
+	BotonesData.Tipo[BOTON_DER_ID] = BOTONES_TIPO_NA;
 	BotonesData.Port[BOTON_CENTRAL_ID] = PUL_ARRANQUE_GPIO_Port;
 	BotonesData.Pin[BOTON_CENTRAL_ID] = PUL_ARRANQUE_Pin;
+	BotonesData.Tipo[BOTON_CENTRAL_ID] = BOTONES_TIPO_NC;
 
 	return BOTONES_ERR_SUCCESS;
 }
 
 enumBotonesStates botonesGetEstado(enumBotonesID boton_ID)
 {
-	if(boton_ID > BOTONES_NOVALID_ID && boton_ID < BOTON_COUNT_ID)
+	if(boton_ID > BOTONES_NOVALID_ID && boton_ID < BOTONES_COUNT_ID)
 	{
-		if(boton_ID == BOTON_CENTRAL_ID)
-		{
-			return (HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET)? BOTON_ST_PRESIONADO: BOTON_ST_NO_PRESIONADO;
-		}
-		else
-		{
-			return (HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET)? BOTON_ST_NO_PRESIONADO: BOTON_ST_PRESIONADO;
-		}
+		return (BotonesData.Estado[boton_ID]);
 	}
 	else
 	{
 		return BOTONES_ST_ERROR_ID;
 	}
+}
+
+void botonesService(void)
+{
+	for (enumBotonesID boton_ID = BOTONES_NOVALID_ID + 1; boton_ID < BOTONES_COUNT_ID; boton_ID++)
+	{
+		if(BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NC)
+		{
+			if(((HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET) && (BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NC))
+					||((HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_RESET) && (BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NA)))
+			{
+				if(BotonesData.RetardoAPresionado[boton_ID] < BOTONES_RETARDO_A_PRESIONADO_CICLOS)
+				{
+					BotonesData.RetardoAPresionado[boton_ID]++;
+				}
+				else
+				{
+					BotonesData.RetardoAPresionado[boton_ID] = BOTONES_RETARDO_A_PRESIONADO_CICLOS;
+				}
+			}
+			else
+			{
+				if(BotonesData.RetardoAPresionado[boton_ID] > 0)
+				{
+					BotonesData.RetardoAPresionado[boton_ID]--;
+				}
+				else
+				{
+					BotonesData.RetardoAPresionado[boton_ID] = 0;
+				}
+			}
+
+			if(BotonesData.RetardoAPresionado[boton_ID] == BOTONES_RETARDO_A_PRESIONADO_CICLOS)
+			{
+				BotonesData.Estado[boton_ID] = BOTON_ST_PRESIONADO;
+			}
+			else if(BotonesData.RetardoAPresionado[boton_ID] == 0)
+			{
+				BotonesData.Estado[boton_ID] = BOTON_ST_NO_PRESIONADO;
+			}
+			else
+			{
+				//Mantiene estado anterior
+			}
+		}
+
+	}
+
 }
 /*** BOTONES FUNCTION DEF END ***/
 

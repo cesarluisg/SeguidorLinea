@@ -8,8 +8,8 @@
 
 //using namespace std;
 
-#define PID_MAX 3
-#define WINDUP_FILTER
+#define PID_MAX 4
+//#define WINDUP_FILTER
 
 PID_s _pid[PID_MAX];
 int _pidCount;
