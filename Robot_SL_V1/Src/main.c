@@ -98,15 +98,17 @@ struct sensores_struct {
 
 
 /*** LEDS BEGIN PV ***/
-typedef enum enumLedsID {LED_NOVALID_ID, LED_DER_ID, LED_IZQ_ID, LED_PLAQUITA_ID, LED_COUNT_ID} enumLedsID;
-typedef enum enumLedsStates {LED_ST_OFF, LED_ST_ON} enumLedsStates;
-typedef enum enumLedsError {LED_ERR_SUCCESS, LED_ERR_ST_NO_VALID} enumLedsError;
+typedef enum enumLedsID {LEDS_NOVALID_ID, LED_DER_ID, LED_IZQ_ID, LED_PLAQUITA_ID, LEDS_COUNT_ID} enumLedsID;
+typedef enum enumLedsStates {LED_ST_NOVALID, LED_ST_OFF, LED_ST_ON, LED_ST_BLINK} enumLedsStates;
+typedef enum enumLedsError {LED_ERR_SUCCESS, LED_ERR_ST_NO_VALID, LED_ERR_NO_VALID_ID} enumLedsError;
 
 struct leds_struct
 {
-	GPIO_TypeDef * Port[LED_COUNT_ID];		//Puerto del LED1
-	uint16_t Pin[LED_COUNT_ID];				//Pin
-	uint8_t Estado[LED_COUNT_ID];			//Último estado registrado
+	GPIO_TypeDef * Port[LEDS_COUNT_ID];		//Puerto del LED1
+	uint16_t Pin[LEDS_COUNT_ID];				//Pin
+	uint8_t Estado[LEDS_COUNT_ID];			//Último estado registrado
+	uint8_t RestantesBlinks[LEDS_COUNT_ID];			//Numero de parpadeos restantes
+	uint16_t TimeOutBlink[LEDS_COUNT_ID];
 } LedsData;
 
 /*** LEDS END PV ***/
@@ -115,6 +117,7 @@ struct leds_struct
 typedef enum enumBotonesID {BOTONES_NOVALID_ID, BOTON_IZQ_ID, BOTON_DER_ID, BOTON_CENTRAL_ID, BOTONES_COUNT_ID} enumBotonesID;
 typedef enum enumBotonesStates {BOTON_ST_PRESIONADO, BOTON_ST_NO_PRESIONADO, BOTONES_ST_ERROR_ID} enumBotonesStates;
 typedef enum enumBotonesError {BOTONES_ERR_SUCCESS, BOTONES_ERR_ID_NO_VALID} enumBotonesError;
+typedef enum enumBotonesEventos {BOTONES_EV_SIN_EVENTO, BOTONES_EV_PRESIONADO, BOTONES_EV_LIBERADO, BOTONES_EV_MANTENIDO_PRESIONADO, BOTONES_EV_ERROR_ID} enumBotonesEventos;
 typedef enum enumBotonesTipo {BOTONES_TIPO_NA, BOTONES_TIPO_NC} enumBotonesTipo;
 
 struct botones_struct
@@ -122,6 +125,8 @@ struct botones_struct
 	GPIO_TypeDef * Port[BOTONES_COUNT_ID];
 	uint16_t Pin[BOTONES_COUNT_ID];
 	uint8_t Estado[BOTONES_COUNT_ID];
+	uint8_t EstadoAnt[BOTONES_COUNT_ID];		//Estado anterior
+	uint8_t Evento[BOTONES_COUNT_ID];
 	uint8_t Tipo[BOTONES_COUNT_ID];
 	int16_t RetardoAPresionado[BOTONES_COUNT_ID]; //Limitado por BOTONES_RETARDO_A_PRESIONADO_CICLOS
 } BotonesData;
@@ -143,6 +148,19 @@ struct ruedas_structt
 }RuedasData;
 /*** RUEDAS END PV ***/
 
+/*** PID OBJECT TEST BEGIN ***/
+/* Test PID defines */
+//#define CALIBRACION_PID			1
+#define PID_KP_COUNT			40
+
+struct pid_struct
+{
+	double Kp[PID_KP_COUNT];
+	uint16_t KpActualIndex;
+	double KpActual;
+}PidData;
+
+/*** PID OBJECT TEST END ***/
 
 /* USER CODE END PV */
 
@@ -173,7 +191,7 @@ void debugPrint(char _out[]);
 
 enumMotorError motoresInit (void); //Inicializa estructura de motores
 enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st); //Setea estado del freno del motor correspondiente
-enumMotorError motorSetPWM(enumMotorID motor_ID, uint8_t porcentaje); //NO USAR. Usar en su lugar motoresSetVelocidad.
+enumMotorError motoresSetPWM(enumMotorID motor_ID, uint8_t porcentaje); //NO USAR. Usar en su lugar motoresSetVelocidad.
 enumMotorError motoresSetVelocidad(enumMotorID motor_ID, uint16_t velocidad); //Setea la velocidad deseada del motor en mm/s
 uint8_t motorGetPWM(enumMotorID motor_ID);
 void motoresService(void); //Presta servicio a los motores
@@ -188,12 +206,15 @@ int16_t sensoresGetValActual(void); //Retorna posición de la línea relativa al c
 /*** LEDS BEGIN PFP ***/
 enumLedsError ledsInit(void); //Inicializar Leds
 enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st);
+enumLedsError ledsBlink(enumLedsID led_ID, uint8_t cantidad_blk);
 void ledsService(void);
 /*** LEDS END PFP ***/
 
 /*** BOTONES BEGIN PFP ***/
 enumBotonesError botonesInit(void); //Inicializar Leds
 enumBotonesStates botonesGetEstado(enumBotonesID boton_ID);
+enumBotonesEventos botonesGetEvento(enumBotonesID boton_ID);
+
 void botonesService(void); //Presta servicio a los pulsadores
 /*** BOTONES END PFP ***/
 
@@ -205,7 +226,9 @@ enumRuedasError ruedaResetOdometro (enumRuedasID rueda_ID);
 void ruedasService(void);
 /*** RUEDAS END PFP ***/
 
-
+/*** PID TEST BEGIN ***/
+void pidTestInit(void);
+/*** PID TEST END ***/
 
 /* USER CODE END PFP */
 
@@ -217,7 +240,7 @@ void ruedasService(void);
 #define MIN_SENSOR_VALUE		(-1000)
 
 /* Speed range defines */
-#define RACE_SPEED_SET_VALUE	(300)	/* Speed in mm/s */
+#define RACE_SPEED_SET_VALUE	(500)	/* Speed in mm/s */
 #define MAX_SPEED_VALUE			(3000)
 #define MIN_SPEED_VALUE			(0)
 
@@ -228,14 +251,18 @@ void ruedasService(void);
 #define MOTOR_PID_KP_IZQ		(0.1)			/* KP PID MOTOR IZQ */
 #define MOTOR_PID_KP_DER		MOTOR_PID_KP_IZQ
 
+/* Leds defines */
+#define LEDS_TIMEOUT_BLINK_CICLOS	(1000)		/* ciclos de blink */
+
 /* Botones defines */
 #define BOTONES_RETARDO_A_PRESIONADO_CICLOS	(50)	/* Expresado en ciclos del while de aprox 500us */
 
 /* Ruedas defines */
-#define RUEDAS_TIMEOUT_CICLOS_0_VEL	(500)		//Controlar de relacionarlo con CORE_TIEMPO_CICLO, que represente este valor 1 segundo y medio
-
+#define RUEDAS_TIMEOUT_CICLOS_0_VEL	(200)		/* Controlar de relacionarlo con CORE_TIEMPO_CICLO, que represente este valor 1 segundo y medio*/
+#define RUEDA_ENCODER_DIVS			(10)
 /* Core defines */
-#define CORE_TIEMPO_CICLO		(0.0005)		//En segundos, el tiempo en segundos aproximado que consume el ciclo del programa
+#define CORE_TIEMPO_CICLO		(0.0005)		/* En segundos, el tiempo en segundos aproximado que consume el ciclo del programa*/
+
 
 /* Driver Mode */
 int _driverMode;
@@ -253,7 +280,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 	  RuedasData.Odometro[RUEDA_IZQ_ID] += RuedasData.Circunferencia / 1000;
 	  RuedasData.TimeOut[RUEDA_IZQ_ID] = 0; //Reseteo Timeout de espera de la interrupción
 	  RuedasData.dt[RUEDA_IZQ_ID] = (double)RuedasData.Count_Raw[RUEDA_IZQ_ID] * 0.00002083333f;
-	  RuedasData.Velocidad[RUEDA_IZQ_ID] = (double)RuedasData.Circunferencia /4 /((double)RuedasData.dt[RUEDA_IZQ_ID]) /1000;
+	  RuedasData.Velocidad[RUEDA_IZQ_ID] = (double)RuedasData.Circunferencia /RUEDA_ENCODER_DIVS /((double)RuedasData.dt[RUEDA_IZQ_ID]) /1000;
   }
   if (htim->Instance==TIM4)
   {
@@ -262,7 +289,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 	  RuedasData.Odometro[RUEDA_DER_ID] += RuedasData.Circunferencia / 1000;
 	  RuedasData.TimeOut[RUEDA_DER_ID] = 0; //Reseteo Timeout de espera de la interrupción
 	  RuedasData.dt[RUEDA_DER_ID] = (double)RuedasData.Count_Raw[RUEDA_DER_ID] * 0.00002083333f;
-	  RuedasData.Velocidad[RUEDA_DER_ID] = (double)RuedasData.Circunferencia /4 /((double)RuedasData.dt[RUEDA_DER_ID]) /1000;
+	  RuedasData.Velocidad[RUEDA_DER_ID] = (double)RuedasData.Circunferencia /RUEDA_ENCODER_DIVS /((double)RuedasData.dt[RUEDA_DER_ID]) /1000;
 
 //	  sprintf(mensaje,"dt %0.7f v %d\r\n", RuedasData.dt[RUEDA_DER_ID], RuedasData.Velocidad[RUEDA_DER_ID]);
 //	  debugPrint(mensaje);
@@ -321,12 +348,11 @@ int main(void)
   ledsInit();
   botonesInit();
   ruedasInit();
+  pidTestInit();
   /*** SENSORES AND MOTORS USER CODE END 1 ***/
 
   /* Driver Modde default value */
   _driverMode = PRE_RACE_MODE;
-  /* PID init */
-  pidInit();
 
   /* Sensor PID pointer */
   PID_s *pidSensores;
@@ -341,8 +367,10 @@ int main(void)
   int botonPresionado = false;
 
   /* Set motor defualt value */
-  motoresSetVelocidad(MOTOR_DER_ID, 0);
-  motoresSetVelocidad(MOTOR_IZQ_ID, 0);
+  motoresSetPWM(MOTOR_DER_ID,0);
+  motoresSetPWM(MOTOR_IZQ_ID,0);
+  //motoresSetVelocidad(MOTOR_DER_ID, 0);
+  //motoresSetVelocidad(MOTOR_IZQ_ID, 0);
 
   /* Set meds default value */
   ledsSet(LED_DER_ID, LED_ST_OFF);
@@ -356,6 +384,8 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint8_t pwm = 30;
+  uint16_t velocidad = 0;
   while (1)
   {
 
@@ -365,7 +395,6 @@ int main(void)
 	  ruedasService();
 	  ledsService();
 	  /*** TEST ZONE - Comentar en la versión Release ***/
-	  sensoresGetValActual();
 	  //motorSetPotencia(MOTOR_DER_ID, 40);
 	  //motorSetPotencia(MOTOR_IZQ_ID, 40);
 
@@ -386,16 +415,49 @@ int main(void)
 	  }
 */
 	  //motoresSetVelocidad(MOTOR_DER_ID, 1000);
-	  //motorSetPWM(MOTOR_DER_ID, 40);
+	  //motorSetPWM(MOTOR_DER_ID, 30);
+	  //motorSetPWM(MOTOR_IZQ_ID, 80);
 	  //HAL_Delay(500);
+/*
+	  sensoresGetValActual();
 
-	  //continue;
+	  motoresSetVelocidad(MOTOR_DER_ID, 1000);
+
+		if(botonesGetEvento(BOTON_DER_ID) == BOTONES_EV_PRESIONADO)
+		{
+			if(pwm < 100)
+			{
+				ledsBlink(LED_DER_ID, 1);
+				pwm++;
+				velocidad += 100;
+			}
+
+			//motoresSetPWM(MOTOR_DER_ID, pwm);
+			sprintf(mensaje, "PWM %d \n\r", pwm);
+			debugPrint(mensaje);
+		}
+
+		if(botonesGetEvento(BOTON_IZQ_ID) == BOTONES_EV_PRESIONADO)
+		{
+			if(pwm > 0)
+			{
+				ledsBlink(LED_DER_ID, 2);
+				pwm--;
+			}
+			//motoresSetPWM(MOTOR_DER_ID, pwm);
+			sprintf(mensaje, "PWM %d \n\r", pwm);
+			debugPrint(mensaje);
+		}
+
+		continue;
+*/
 
 	   /*** TEST ZONE - FIN ***/
 
 	  /* Check Mode */
 		switch (_driverMode) {
 			case ERROR_MODE:
+
 				/* Error mode, display error */
 				botonPresionado = false;
 
@@ -426,27 +488,70 @@ int main(void)
 				motoresSetVelocidad(MOTOR_IZQ_ID, 0);
 				/* Go to Pre Race Mode */
 				_driverMode = PRE_RACE_MODE;
+
+				ledsBlink(LED_DER_ID, 1);
+				ledsSet(LED_IZQ_ID, LED_ST_OFF);
+
 				break;
 
 			case PRE_RACE_MODE:
 				/* PreRace Mode */
 
-				/* Led status Race Mode */
-				//setLed();
-				ledsSet(LED_DER_ID, LED_ST_ON);
-				ledsSet(LED_IZQ_ID, LED_ST_OFF);
+				/* Retardo del ciclo */
+				sensoresGetValActual();
+				sensoresGetValActual();
 
+				/* Led status Race Mode */
+
+#ifdef CALIBRACION_PID
+				/* Wait for Button To change KP of PID upward */
+				if(botonesGetEvento(BOTON_IZQ_ID) == BOTONES_EV_PRESIONADO)
+				{
+					/* Cambiar de KP */
+					if(PidData.KpActualIndex < (PID_KP_COUNT - 1))
+						PidData.KpActualIndex++;
+
+					/* guardarlo para enviar a setpid */
+					PidData.KpActual = PidData.Kp[PidData.KpActualIndex];
+
+					sprintf(mensaje, "ind %d %0.3f \n\r", PidData.KpActualIndex, PidData.Kp[PidData.KpActualIndex]);
+					debugPrint(mensaje);
+
+					/* indicar el valor*/
+					ledsBlink(LED_DER_ID, (int)((PidData.KpActual - (int)(PidData.KpActual)) * 10));
+					ledsBlink(LED_IZQ_ID, (int)PidData.KpActual);
+					/* Led Power Value */
+				}
+				/* Wait for Button To change KP of PID downward*/
+				if(botonesGetEvento(BOTON_DER_ID) == BOTONES_EV_PRESIONADO)
+				{
+					/* Cambiar de KP */
+					if(PidData.KpActualIndex > 0)
+						PidData.KpActualIndex--;
+
+					/* guardarlo para enviar a setpid */
+					PidData.KpActual = PidData.Kp[PidData.KpActualIndex];
+
+					sprintf(mensaje, "ind %d %0.3f \n\r", PidData.KpActualIndex, PidData.Kp[PidData.KpActualIndex]);
+					debugPrint(mensaje);
+
+					/* indicar el valor*/
+					ledsBlink(LED_DER_ID, (int)((PidData.KpActual - (int)(PidData.KpActual)) * 10));
+					ledsBlink(LED_IZQ_ID, (int)PidData.KpActual);
+					/* Led Power Value */
+				}
+
+#else
 				/* Wait for Button To change Max Power to Motor */
-				if(botonesGetEstado(BOTON_IZQ_ID) == BOTON_ST_PRESIONADO)
+				if(botonesGetEvento(BOTON_IZQ_ID) == BOTONES_EV_PRESIONADO)
 				{
 					/* take new power value */
 					speedRace = changeMaxSpeed(speedRace);
 
 					/* Led Power Value */
-					//ledsSet(LED_DER_ID, LED_ST_ON);
-					ledsSet(LED_IZQ_ID, LED_ST_ON);
+					ledsBlink(LED_IZQ_ID, 1);
 				}
-
+#endif
 				/* Wait for Button ON to RUN */
 				if((botonesGetEstado(BOTON_CENTRAL_ID) == BOTON_ST_PRESIONADO) || botonPresionado) /* Is button change mode on? */
 				{
@@ -455,7 +560,7 @@ int main(void)
 					//Example pidSet (pidSensores, 0.1, 100, -100, 0.7, 0.02, 0.1, 0, 0);
 
 					/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
-					pidSet( pidSensores, CORE_TIEMPO_CICLO, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1.4, 0.05425, 0, 0, 0);
+					pidSet( pidSensores, CORE_TIEMPO_CICLO, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1, 0.00001, 0, 0, 0);
 
 					/* default Value */
 					correction = 0;
@@ -501,12 +606,13 @@ int main(void)
 
 			default:
 				/* Unknown mode */
+
 				_driverMode = ERROR_MODE;
 				break;
 		};
 
 		/* Change Mode Button */
-		if(botonesGetEstado(BOTON_DER_ID) == BOTON_ST_PRESIONADO)/* Is button change mode on? */
+		if(botonesGetEvento(BOTON_DER_ID) == BOTONES_EV_PRESIONADO)/* Is button change mode on? */
 		{
 			/* Por ahora solo vuelve a estado preRace, debido a que no est'an desarrollados los otros modos */
 			//_driverMode++;
@@ -518,7 +624,8 @@ int main(void)
 			/* Set motor Race max value */
 			motoresSetVelocidad(MOTOR_DER_ID, 0);
 			motoresSetVelocidad(MOTOR_IZQ_ID, 0);
-
+			//motoresSetPWM(MOTOR_DER_ID, 0);
+			//motoresSetPWM(MOTOR_IZQ_ID, 0);
 			speedRace = RACE_SPEED_SET_VALUE;
 			botonPresionado = false;
 			_driverMode = PRE_RACE_MODE;
@@ -989,7 +1096,7 @@ void calcVel(int velRace, double newCorrection)
 	/* newCorrection es bueno que sea un double asi se puede multiplicar o dividir por un fraccional */
 	//sprintf(mensaje, "c %f \n\r", newCorrection);
 	//debugPrint(mensaje);
-	    newCorrection = newCorrection * 10;
+	    //newCorrection = newCorrection;
 /*
 	    double auxNew = newCorrection;
 
@@ -1039,7 +1146,13 @@ void calcVel(int velRace, double newCorrection)
     }
 
     /* Set motor speed */
-	motoresSetVelocidad(MOTOR_DER_ID, velMotorDer);
+
+    //sprintf(mensaje, "vD %d, vI %d \r\n", velMotorDer, velMotorIzq);
+    //debugPrint(mensaje);
+
+    //motoresSetPWM(MOTOR_DER_ID, (uint8_t)(velMotorDer * MOTOR_PWM_MAX_STEPS /MOTOR_SPEED_MAX));
+	//motoresSetPWM(MOTOR_IZQ_ID, (uint8_t)(velMotorIzq * MOTOR_PWM_MAX_STEPS /MOTOR_SPEED_MAX));
+    motoresSetVelocidad(MOTOR_DER_ID, velMotorDer);
 	motoresSetVelocidad(MOTOR_IZQ_ID, velMotorIzq);
 
 }
@@ -1085,6 +1198,9 @@ enumMotorError motoresInit (void)
 	MotoresData.PWM_Actual[MOTOR_IZQ_ID] = 0;
 	MotoresData.PWM_Actual[MOTOR_DER_ID] = 0;
 
+	MotoresData.velocidadSetPoint[MOTOR_IZQ_ID] = 0;
+	MotoresData.velocidadSetPoint[MOTOR_DER_ID] = 0;
+
 	return MOTOR_ERR_SUCCESS;
 }
 
@@ -1093,10 +1209,10 @@ enumMotorError motoresInit (void)
  * @param motor_ID: MOTOR_IZQ_ID ó MOTOR_DER_ID
  * @param porcentaje: Valor en porcentaje del ancho del pulso del PWM
  */
-enumMotorError motorSetPWM(enumMotorID motor_ID, uint8_t porcentaje)
+enumMotorError motoresSetPWM(enumMotorID motor_ID, uint8_t porcentaje)
 {
 	//char mensaje[100];
-	//sprintf(mensaje, "Setear ID %d, Potencia %d \n\r", motor_ID, velocidad);
+	//sprintf(mensaje, "ID %d, P %d \n\r", motor_ID, porcentaje);
 	//debugPrint(mensaje);
 
 	//Verifico ID del motor
@@ -1193,9 +1309,11 @@ enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st)
  */
 void motoresService (void)
 {
+	double pwm;
 	double correction = 0;
 	enumMotorID motor_ID;
 	enumRuedasID rueda_ID;
+
 
 	int16_t	PWM;
 
@@ -1207,7 +1325,22 @@ void motoresService (void)
 		else
 			rueda_ID = RUEDA_DER_ID;
 
-		if((RuedasData.Velocidad[rueda_ID] != RuedasData.VelocidadAnt[rueda_ID]) || (RuedasData.Velocidad[rueda_ID] == 0))
+		if(MotoresData.velocidadSetPoint[motor_ID] > 0)
+		{
+			pwm = (double)(MotoresData.velocidadSetPoint[motor_ID]/(RuedasData.Circunferencia/1000)) * 2.941176 + 35;
+		}
+		else
+		{
+			pwm = 0;
+		}
+
+		//sprintf(mensaje, "pwm %f spv %d \n\r", pwm, MotoresData.velocidadSetPoint[motor_ID]);
+		//debugPrint(mensaje);
+
+		motoresSetPWM(motor_ID, pwm);
+
+		#if 0
+		if((RuedasData.Velocidad[rueda_ID] != RuedasData.VelocidadAnt[rueda_ID]) || (RuedasData.Velocidad[rueda_ID] != 0))
 		{
 			//DEBUG
 			ledsSet(LED_DER_ID, LED_ST_ON);
@@ -1252,9 +1385,11 @@ void motoresService (void)
 			}
 */
 			//Setear nuevo valor de PWM
-			motorSetPWM(motor_ID, (uint8_t)PWM);
-			//motorSetPWM(MOTOR_DER_ID, 40);
+			motoresSetPWM(motor_ID, (uint8_t)PWM);
+			//motoresSetPWM(MOTOR_DER_ID, 40);
+
 		}
+#endif
 	}
 
 }
@@ -1538,15 +1673,17 @@ enumLedsError ledsInit(void)
 
 enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st)
 {
-	if(led_ID > LED_NOVALID_ID && led_ID < LED_COUNT_ID)
+	if(led_ID > LEDS_NOVALID_ID && led_ID < LEDS_COUNT_ID)
 	{
 		if(led_st == LED_ST_ON)
 		{
 			HAL_GPIO_WritePin(LedsData.Port[led_ID], LedsData.Pin[led_ID], GPIO_PIN_RESET);
+			LedsData.Estado[led_ID] = LED_ST_ON;
 		}
 		else if (led_st == LED_ST_OFF)
 		{
 			HAL_GPIO_WritePin(LedsData.Port[led_ID], LedsData.Pin[led_ID], GPIO_PIN_SET);
+			LedsData.Estado[led_ID] = LED_ST_OFF;
 		}
 		else
 		{
@@ -1556,11 +1693,66 @@ enumLedsError ledsSet(enumLedsID led_ID, enumLedsStates led_st)
 	return LED_ERR_SUCCESS;
 }
 
+enumLedsStates ledsGetSt(enumLedsID led_ID)
+{
+	if(led_ID > LEDS_NOVALID_ID && led_ID < LEDS_COUNT_ID)
+	{
+		return LedsData.Estado[led_ID];
+	}
+	return LED_ST_NOVALID;
+}
+
+enumLedsError ledsBlink(enumLedsID led_ID, uint8_t cantidad_blk)
+{
+	if(led_ID > LEDS_NOVALID_ID && led_ID < LEDS_COUNT_ID)
+	{
+		LedsData.Estado[led_ID] = LED_ST_BLINK;
+		LedsData.RestantesBlinks[led_ID] = cantidad_blk;
+		LedsData.TimeOutBlink[led_ID] = LEDS_TIMEOUT_BLINK_CICLOS;
+		return LED_ERR_SUCCESS;
+	}
+	else
+	{
+		return LED_ERR_NO_VALID_ID;
+	}
+}
+
 void ledsService(void)
 {
-	//Por ahora es solo apagar los leds por cuestiones de testing
-	ledsSet(LED_DER_ID, LED_ST_OFF);
-	ledsSet(LED_IZQ_ID, LED_ST_OFF);
+	//Ejecutar blink
+	for(uint8_t led_ID = LEDS_NOVALID_ID + 1; led_ID < LEDS_COUNT_ID; led_ID++)
+	{
+		if(LedsData.Estado[led_ID] == LED_ST_BLINK)
+		{
+			if(LedsData.RestantesBlinks[led_ID] > 0)
+			{
+				if(LedsData.TimeOutBlink[led_ID] > LEDS_TIMEOUT_BLINK_CICLOS/2)
+				{
+					HAL_GPIO_WritePin(LedsData.Port[led_ID], LedsData.Pin[led_ID], GPIO_PIN_RESET);
+					LedsData.TimeOutBlink[led_ID]--;
+				}
+				else if (LedsData.TimeOutBlink[led_ID] > 0)
+				{
+					HAL_GPIO_WritePin(LedsData.Port[led_ID], LedsData.Pin[led_ID], GPIO_PIN_SET);
+					LedsData.TimeOutBlink[led_ID]--;
+				}
+				else
+				{
+					LedsData.RestantesBlinks[led_ID]--;
+					LedsData.TimeOutBlink[led_ID] = LEDS_TIMEOUT_BLINK_CICLOS;
+				}
+			}
+			else
+			{
+				ledsSet(led_ID, LED_ST_OFF);
+			}
+		}
+	}
+
+
+	//TEST: Por ahora es solo apagar los leds por cuestiones de testing
+	//ledsSet(LED_DER_ID, LED_ST_OFF);
+	//ledsSet(LED_IZQ_ID, LED_ST_OFF);
 }
 /*** LEDS FUNCTION DEF END ***/
 
@@ -1597,10 +1789,24 @@ enumBotonesStates botonesGetEstado(enumBotonesID boton_ID)
 	}
 }
 
+enumBotonesEventos botonesGetEvento(enumBotonesID boton_ID)
+{
+	if(boton_ID > BOTONES_NOVALID_ID && boton_ID < BOTONES_COUNT_ID)
+	{
+		return (BotonesData.Evento[boton_ID]);
+	}
+	else
+	{
+		return BOTONES_EV_ERROR_ID;
+	}
+}
+
 void botonesService(void)
 {
 	for (enumBotonesID boton_ID = BOTONES_NOVALID_ID + 1; boton_ID < BOTONES_COUNT_ID; boton_ID++)
 	{
+
+		//Verifico si se presionó algún botón
 		if(((HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_SET) && (BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NC))
 				||((HAL_GPIO_ReadPin(BotonesData.Port[boton_ID], BotonesData.Pin[boton_ID]) == GPIO_PIN_RESET) && (BotonesData.Tipo[boton_ID] == BOTONES_TIPO_NA)))
 		{
@@ -1625,19 +1831,44 @@ void botonesService(void)
 			}
 		}
 
-
+		//Actualizo el estado del botón si se cumplió el tiempo de retardo
 		if(BotonesData.RetardoAPresionado[boton_ID] == BOTONES_RETARDO_A_PRESIONADO_CICLOS)
 		{
+			//Cambio estado
 			BotonesData.Estado[boton_ID] = BOTON_ST_PRESIONADO;
+			//Verifico evento
+			if(BotonesData.EstadoAnt[boton_ID] == BOTON_ST_NO_PRESIONADO)
+			{
+				BotonesData.Evento[boton_ID] = BOTONES_EV_PRESIONADO;
+			}
+			else
+			{
+				BotonesData.Evento[boton_ID] = BOTONES_EV_MANTENIDO_PRESIONADO;
+			}
 		}
 		else if(BotonesData.RetardoAPresionado[boton_ID] == 0)
 		{
+			//Cambio estado
 			BotonesData.Estado[boton_ID] = BOTON_ST_NO_PRESIONADO;
+			//Verifico evento
+			if(BotonesData.EstadoAnt[boton_ID] == BOTON_ST_PRESIONADO)
+			{
+				BotonesData.Evento[boton_ID] = BOTONES_EV_LIBERADO;
+			}
+			else
+			{
+				BotonesData.Evento[boton_ID] = BOTONES_EV_SIN_EVENTO;
+			}
 		}
 		else
 		{
 			//Mantiene estado anterior
+			//No hay evento
+
 		}
+
+		//Guardar estado anterior
+		BotonesData.EstadoAnt[boton_ID] = BotonesData.Estado[boton_ID];
 
 	}
 
@@ -1716,7 +1947,7 @@ void ruedasService(void)
 	{
 		if(rueda_ID == RUEDA_DER_ID)
 		{
-			ledsSet(LED_DER_ID, LED_ST_ON);
+			//ledsSet(LED_DER_ID, LED_ST_ON);
 			//sprintf(mensaje," TO %ld ", (uint32_t)RuedasData.TimeOut[rueda_ID]);
 			//debugPrint(mensaje);
 		}
@@ -1736,6 +1967,27 @@ void ruedasService(void)
 
 
 /*** RUEDA FUNCTION DEF END ***/
+
+/*** PID FUNCION DEF BEGIN ***/
+void pidTestInit(void)
+{
+	//inicializar array de kps a probar
+	for(uint16_t pid_n = 0; pid_n < PID_KP_COUNT; pid_n++)
+	{
+		if(pid_n < 20)
+		{
+			PidData.Kp[pid_n] = 2.0 + (double)pid_n * 0.1;
+		}
+		else
+		{
+			PidData.Kp[pid_n] = (double)pid_n - 19 + 3 ;
+		}
+	}
+	PidData.KpActual = 0.1;
+	PidData.KpActualIndex = 0;
+
+}
+/*** PID FUNCTION DEF END ***/
 
 /* USER CODE END 4 */
 
