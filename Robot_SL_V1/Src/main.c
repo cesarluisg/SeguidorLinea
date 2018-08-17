@@ -150,7 +150,7 @@ struct ruedas_structt
 
 /*** PID OBJECT TEST BEGIN ***/
 /* Test PID defines */
-//#define CALIBRACION_PID			1
+#define CALIBRACION_PID			1
 #define PID_KP_COUNT			40
 
 struct pid_struct
@@ -240,7 +240,7 @@ void pidTestInit(void);
 #define MIN_SENSOR_VALUE		(-1000)
 
 /* Speed range defines */
-#define RACE_SPEED_SET_VALUE	(500)	/* Speed in mm/s */
+#define RACE_SPEED_SET_VALUE	(650)	/* Speed in mm/s */
 #define MAX_SPEED_VALUE			(3000)
 #define MIN_SPEED_VALUE			(0)
 
@@ -360,7 +360,7 @@ int main(void)
   if (true != pidGetPID(&pidSensores))
   	return -1;
   /* PID Sensor set default value */
-  pidSet( pidSensores, CORE_TIEMPO_CICLO, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.01, 0, 0);
+  //pidSet( pidSensores, CORE_TIEMPO_CICLO, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.7, 0.02, 0.01, 0, 0);
 
   int16_t SensorValorActual;
 
@@ -414,10 +414,7 @@ int main(void)
 		  debugPrint("No Presionado \n\r");
 	  }
 */
-	  //motoresSetVelocidad(MOTOR_DER_ID, 1000);
-	  //motorSetPWM(MOTOR_DER_ID, 30);
-	  //motorSetPWM(MOTOR_IZQ_ID, 80);
-	  //HAL_Delay(500);
+
 /*
 	  sensoresGetValActual();
 
@@ -451,7 +448,12 @@ int main(void)
 
 		continue;
 */
+/*
+	  sensoresGetValActual();
+	  motorSetFreno(MOTOR_DER_ID, MOTOR_FRENO_FRENAR);
 
+	  continue;
+*/
 	   /*** TEST ZONE - FIN ***/
 
 	  /* Check Mode */
@@ -498,7 +500,6 @@ int main(void)
 				/* PreRace Mode */
 
 				/* Retardo del ciclo */
-				sensoresGetValActual();
 				sensoresGetValActual();
 
 				/* Led status Race Mode */
@@ -560,7 +561,7 @@ int main(void)
 					//Example pidSet (pidSensores, 0.1, 100, -100, 0.7, 0.02, 0.1, 0, 0);
 
 					/* This break is to be ready for Run, while runButton is ON the robot is waiting for run */
-					pidSet( pidSensores, CORE_TIEMPO_CICLO, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 1, 0.00001, 0, 0, 0);
+					pidSet( pidSensores, CORE_TIEMPO_CICLO, MAX_SENSOR_VALUE, MIN_SENSOR_VALUE, 0.85, 0.00001, 0.0001, 0, 0);
 
 					/* default Value */
 					correction = 0;
@@ -1097,21 +1098,21 @@ void calcVel(int velRace, double newCorrection)
 	//sprintf(mensaje, "c %f \n\r", newCorrection);
 	//debugPrint(mensaje);
 	    //newCorrection = newCorrection;
-/*
+
+
 	    double auxNew = newCorrection;
 
 	    if(0 > auxNew)
 	        auxNew = auxNew * (-1);
 
-	    if( auxNew > 20)
-	    	velRace = velRace /1.5;
-	    else if( auxNew > 50)
-	    	velRace = velRace /2;
-	    else if( auxNew > 70)
+
+	    /*if( auxNew > 300)
 	    	velRace = velRace /3;
-	    else if( auxNew > 90)
-	    	velRace = velRace /4;
-*/
+	    else if( auxNew > 500)
+	    	velRace = velRace /7;*/
+	    else if( auxNew > 700)
+	    	velRace = velRace /2;
+
 
     int velMotorIzq = velRace;
     int velMotorDer = velRace;
@@ -1124,6 +1125,7 @@ void calcVel(int velRace, double newCorrection)
         if (velMotorIzq < MIN_SPEED_VALUE)
         {
             velMotorIzq = MIN_SPEED_VALUE;
+            motorSetFreno(MOTOR_IZQ_ID, MOTOR_FRENO_FRENAR);
         }
         if (velMotorDer > MAX_SPEED_VALUE)
         {
@@ -1138,6 +1140,7 @@ void calcVel(int velRace, double newCorrection)
         if (velMotorDer < MIN_SPEED_VALUE)
         {
             velMotorDer = MIN_SPEED_VALUE;
+            motorSetFreno(MOTOR_DER_ID, MOTOR_FRENO_FRENAR);
         }
         if (velMotorIzq > MAX_SPEED_VALUE)
         {
@@ -1216,18 +1219,21 @@ enumMotorError motoresSetPWM(enumMotorID motor_ID, uint8_t porcentaje)
 	//debugPrint(mensaje);
 
 	//Verifico ID del motor
+
 	if(motor_ID != MOTOR_IZQ_ID && motor_ID != MOTOR_DER_ID)
 	{
 		return MOTOR_ERR_ID_INVALID;
 	}
 
 	//Verifico estado del freno
-	if(MotoresData.freno_state[motor_ID] == MOTOR_FRENO_ST_FRENADO)
+	if (porcentaje)
 	{
-		//Liberar freno si está seteado
-		HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_LIBERAR);
+		if(MotoresData.freno_state[motor_ID] == MOTOR_FRENO_ST_FRENADO)
+		{
+			//Liberar freno si está seteado
+			HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_LIBERAR);
+		}
 	}
-
 	//Limitar porcentaje de PWM
 	if (porcentaje > MOTOR_POT_MAX)
 		porcentaje = MOTOR_POT_MAX;
@@ -1266,7 +1272,7 @@ uint8_t motorGetPWM(enumMotorID motor_ID)
 enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st)
 {
 	//Verificar ID del motor
-	if(motor_ID != MOTOR_IZQ_ID || motor_ID != MOTOR_DER_ID)
+	if(motor_ID != MOTOR_IZQ_ID && motor_ID != MOTOR_DER_ID)
 	{
 		return MOTOR_ERR_ID_INVALID;
 	}
@@ -1280,22 +1286,29 @@ enumMotorError motorSetFreno(enumMotorID motor_ID, enumMotorFreno freno_st)
 		if(motor_ID == MOTOR_DER_ID)
 		{
 			__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+			motoresSetVelocidad(MOTOR_DER_ID, 0);
 		}
 		else
 		{
 			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+			motoresSetVelocidad(MOTOR_IZQ_ID, 0);
 		}
 
 		//Efectuar frenado
 		HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_FRENAR);
+		MotoresData.freno_state[motor_ID] = MOTOR_FRENO_ST_FRENADO;
 	}
 	else if (freno_st == MOTOR_FRENO_LIBERAR)
 	{
 		//Liberar freno
 		HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_LIBERAR);
+		MotoresData.freno_state[motor_ID] = MOTOR_FRENO_ST_LIBERADO;
 	}
 	else
 	{
+		//Liberar freno
+		HAL_GPIO_WritePin(MotoresData.frenoPinPort[motor_ID], MotoresData.frenoPin[motor_ID], MOTOR_FRENO_OUT_PIN_LIBERAR);
+		MotoresData.freno_state[motor_ID] = MOTOR_FRENO_ST_LIBERADO;
 		return MOTOR_ERR_FRENO_ST_NOTVALID;
 	}
 
@@ -1974,14 +1987,15 @@ void pidTestInit(void)
 	//inicializar array de kps a probar
 	for(uint16_t pid_n = 0; pid_n < PID_KP_COUNT; pid_n++)
 	{
-		if(pid_n < 20)
+		//if(pid_n < 20)
 		{
-			PidData.Kp[pid_n] = 2.0 + (double)pid_n * 0.1;
+			PidData.Kp[pid_n] = 0.6 + (double)pid_n * 0.1;
 		}
+		/*
 		else
 		{
-			PidData.Kp[pid_n] = (double)pid_n - 19 + 3 ;
-		}
+			PidData.Kp[pid_n] = (double)pid_n - 19 ;
+		}*/
 	}
 	PidData.KpActual = 0.1;
 	PidData.KpActualIndex = 0;
