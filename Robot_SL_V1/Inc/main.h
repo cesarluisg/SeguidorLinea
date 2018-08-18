@@ -130,7 +130,7 @@ enum genError
 /*** SENSORES BEGIN Private defines ***/
 #define SENSORES_ADC_COUNT				(8)
 #define SENSORES_LINEA_COUNT			(10)	/*6 Reales y 4 Virtuales */
-#define SENSORES_DIF_RAW_MIN			(1024)	/* Diferencia mínima entre máximo y mínimo para que exista línea*/
+#define SENSORES_DIF_RAW_MIN			(1500)	/* Diferencia mínima entre máximo y mínimo para que exista línea*/
 #define SENSORES_MAXIMOS_CONTADOS_MAX	(10)	/* número máximo de Maximos para promediar */
 /*** SENSORES END Private defines ***/
 
